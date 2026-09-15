@@ -1,5 +1,6 @@
 // トレーニングメニュー本体（training-menu-v6.html のロジックを引き継ぎ、保存先を localStorage に変更）
 (function(){
+  const APP_VERSION = 3; // 更新して公開するたびに上げる（service-worker.js の CACHE と数字を合わせる）
   const pad2 = n => String(n).padStart(2,'0');
   const toDateStr = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
   const todayStr = () => toDateStr(new Date());
@@ -853,6 +854,24 @@
     });
   }
 
+  // 新しい版を公開したら、次に開いたときに自動で読み込み直して切り替える
+  function registerServiceWorker(){
+    if (!('serviceWorker' in navigator)) return;
+    const hadController = !!navigator.serviceWorker.controller; // 初回インストール時は読み込み直さない
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloaded || dirty) return; // 入力中で未保存なら、次に開いたときに切り替わる
+      reloaded = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('service-worker.js', { updateViaCache:'none' })
+      .then(reg => {
+        // iPhone はアプリを閉じても裏で残っていることがあるので、画面に戻ってきたときにも更新を確認する
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+      })
+      .catch(e => console.warn('Service Worker の登録に失敗しました', e));
+  }
+
   async function init(){
     categories = await loadCategories();
     presets = await loadPresets();
@@ -866,9 +885,8 @@
     TMNotify.mount(notifyArea);
     await updateReminder();
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js').catch(e => console.warn('Service Worker の登録に失敗しました', e));
-    }
+    $('appVersion').textContent = `バージョン ${APP_VERSION}`;
+    registerServiceWorker();
     TMNotify.start();
 
     setInterval(tick, 30 * 1000);

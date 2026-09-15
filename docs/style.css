@@ -140,6 +140,8 @@ body { overscroll-behavior-y:none; }
 #app .history-day .hd-vol { font-weight:600; font-size:12px; color:#c94a1f; margin-left:8px; }
 #app .hd-edit { background:#fff; border:1px solid #e05a2b; color:#e05a2b; border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer; flex:none; }
 
+#app .app-version { text-align:center; font-size:11px; color:#bbb; margin-top:24px; }
+
 /* 通知・バックアップ設定 */
 #app .panel { background:#fff; border:1px solid #eee; border-radius:12px; padding:14px; margin-top:10px; font-size:13px; }
 #app .panel h3 { font-size:14px; margin:0 0 10px; }

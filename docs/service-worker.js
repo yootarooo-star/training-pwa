@@ -2,7 +2,7 @@
 // アプリのファイルを更新したら CACHE の番号を上げると、古いキャッシュが確実に入れ替わる。
 importScripts('config.js');
 
-const CACHE = 'training-menu-v2';
+const CACHE = 'training-menu-v3'; // app.js の APP_VERSION と数字を合わせる
 const ASSETS = [
   './', 'index.html', 'style.css', 'config.js', 'storage.js', 'notify.js', 'app.js', 'manifest.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
@@ -10,7 +10,10 @@ const ASSETS = [
 const NETWORK_TIMEOUT_MS = 3000;
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache:'reload' … ブラウザに残っている古いファイルではなく、必ずサーバーから取り直して保存する
+  event.waitUntil(caches.open(CACHE)
+    .then(cache => cache.addAll(ASSETS.map(u => new Request(u, { cache:'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
@@ -30,7 +33,9 @@ self.addEventListener('fetch', event => {
 
 async function networkFirst(req){
   const cache = await caches.open(CACHE);
-  const network = fetch(req).then(res => {
+  // GitHub Pages はファイルを10分間キャッシュさせる設定なので、それを使わず毎回サーバーに更新を確認する
+  // （変わっていなければ中身は送られてこないので軽い）
+  const network = fetch(req.url, { cache:'no-cache', credentials:'same-origin' }).then(res => {
     if (res.ok) cache.put(req, res.clone());
     return res;
   });

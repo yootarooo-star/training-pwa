@@ -54,7 +54,8 @@ npx wrangler deploy
 
 ## メモ
 
-- アプリのファイルを更新したら、`docs/service-worker.js` の `CACHE = 'training-menu-v1'` の数字を上げる
+- アプリのファイルを更新したら、`docs/app.js` の `APP_VERSION` と `docs/service-worker.js` の `CACHE = 'training-menu-vN'` の数字を**両方**上げる。公開後、アプリを開くと自動で新しい版に切り替わる（画面の一番下のバージョン番号で確認できる）
+- ⚠️ iPhone でホーム画面のアイコンを削除すると、アプリ内の記録も消える。更新されないときも削除はしない
 - 通知サーバーのテスト: `cd push-worker && node --test`
 - アイコンの差し替え: `docs/icons/` の PNG を置き換える（または `python3 tools/make_icons.py` を編集して再生成）
 - 鍵を作り直すと（`node scripts/gen-vapid-keys.mjs --force`）、公開鍵を `wrangler.toml` と `docs/config.js` の両方に貼り直す必要がある
