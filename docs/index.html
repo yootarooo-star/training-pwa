@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>トレーニングメニュー</title>
+  <meta name="description" content="筋トレの組み合わせを選んで記録し、継続日数を見える化するアプリ">
+  <meta name="theme-color" content="#fafafa">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="筋トレ記録">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- iPhone の起動画面（機種ごと。tools/make_icons.py で生成） -->
+  <link rel="apple-touch-startup-image" href="splash/splash-1320x2868.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1206x2622.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1260x2736.png" media="(device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div class="app-header">
+    <div>
+      <h1>💪 トレーニングメニュー</h1>
+      <div class="sub">組み合わせを選んで記録、継続日数も見える化</div>
+    </div>
+    <button class="bell-btn" id="bellBtn" aria-label="通知の設定">🔔</button>
+  </div>
+
+  <div class="reminder" id="reminderBanner" hidden>
+    <div class="reminder-text" id="reminderText"></div>
+    <button id="reminderBtn">記録する</button>
+  </div>
+
+  <div class="date-row">
+    <input type="date" id="dateInput" />
+  </div>
+
+  <div class="streak-banner">
+    <div class="streak-main">🔥 継続 <span class="streak-num" id="streakNum">-</span> 日</div>
+    <div class="streak-sub" id="streakSub">記録を読み込み中...</div>
+  </div>
+
+  <div class="section-title">スケジュール</div>
+  <div class="sched-nav">
+    <div class="sched-nav-btns">
+      <button id="weekViewBtn" class="active">週間</button>
+      <button id="monthViewBtn">月間</button>
+    </div>
+    <div class="sched-nav-btns">
+      <button id="prevBtn" aria-label="前へ">←</button>
+      <span class="sched-label" id="schedLabel"></span>
+      <button id="nextBtn" aria-label="次へ">→</button>
+    </div>
+  </div>
+  <div id="scheduleGrid"><div class="loading">読み込み中...</div></div>
+
+  <div id="comboSection">
+    <div class="section-title">保存済みの組み合わせ</div>
+    <div class="preset-row" id="presetRow"></div>
+
+    <div class="section-title">今日の組み合わせを選ぶ</div>
+    <div id="restBanner" style="display:none;" class="rest-banner">この曜日は休息日に設定されています。それでもメニューを作成する場合は下から選んでください。</div>
+    <div id="categoryPicker"></div>
+
+    <div class="combo-summary" id="comboSummary"></div>
+
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <button class="btn-outline" id="savePresetBtn">この組み合わせを保存</button>
+    </div>
+
+    <button class="btn-main" id="buildBtn" style="margin-top:14px;">この内容で今日のメニューを作成</button>
+  </div>
+
+  <div id="rebuildNoteWrap" style="display:none;">
+    <div class="rebuild-note">この日の記録は作成済みです。組み合わせを選び直す場合は「組み合わせを変更」を押してください。</div>
+    <button class="btn-outline" id="changeComboBtn" style="margin-top:8px;">組み合わせを変更</button>
+  </div>
+
+  <div id="checklistWrap" style="display:none;">
+    <div id="itemsContainer"></div>
+    <button class="btn-main" id="saveDayBtn" style="margin-top:6px;">この日の記録を保存</button>
+    <div class="status" id="statusMsg"></div>
+  </div>
+
+  <div class="history-toggle" id="historyToggle">▼ 過去の記録を見る</div>
+  <div class="history-list" id="historyList" style="display:none;"></div>
+
+  <div class="rotation-toggle" id="rotationToggle">曜日ごとの自動割り当てを設定する</div>
+  <div id="rotationArea" style="display:none;"></div>
+
+  <div class="notify-toggle" id="notifyToggle">通知を設定する</div>
+  <div id="notifyArea" class="panel" hidden></div>
+
+  <div class="edit-toggle" id="editToggle">種目を編集する</div>
+  <div id="editArea" style="display:none;"></div>
+
+  <div class="backup-toggle" id="backupToggle">データのバックアップ</div>
+  <div id="backupArea" hidden></div>
+</div>
+
+<script src="config.js"></script>
+<script src="storage.js"></script>
+<script src="notify.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

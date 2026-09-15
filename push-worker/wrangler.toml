@@ -1,0 +1,20 @@
+name = "training-push"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# 毎分チェックして、設定時刻になった端末に通知を送る
+[triggers]
+crons = ["* * * * *"]
+
+# `npx wrangler kv namespace create SUBS` で表示された id に置き換える
+[[kv_namespaces]]
+binding = "SUBS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# アプリを公開するURLのドメイン部分（GitHub Pages なら https://ユーザー名.github.io）。カンマ区切りで複数可
+ALLOWED_ORIGIN = "https://yootarooo-star.github.io,http://localhost:8080"
+# 通知の送り主を示すURL（アプリのURLでOK）
+VAPID_SUBJECT = "https://yootarooo-star.github.io/training-pwa/"
+VAPID_PUBLIC_KEY = "BBq_ZHpm54or3VrAfZiGCO_cVMeS8wgk8_l-jl6JXbYcRrTkrhKDE3t_NkSGMlZ85zYpl9rNAyNBX_4GYVCxpwc"
+# VAPID_PRIVATE_KEY は秘密情報なので、ここには書かず `npx wrangler secret put VAPID_PRIVATE_KEY` で登録する

@@ -1,0 +1,17 @@
+{
+  "name": "トレーニングメニュー",
+  "short_name": "筋トレ記録",
+  "description": "筋トレの組み合わせを選んで記録し、継続日数を見える化するアプリ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e05a2b",
+  "theme_color": "#fafafa",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

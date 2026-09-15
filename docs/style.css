@@ -1,0 +1,139 @@
+html, body { margin:0; background:#fafafa; -webkit-text-size-adjust:100%; }
+body { overscroll-behavior-y:none; }
+
+#app { max-width:560px; margin:0 auto; font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; color:#1a1a1a; background:#fafafa;
+  padding: calc(env(safe-area-inset-top) + 14px) calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 40px) calc(env(safe-area-inset-left) + 16px); }
+#app * { box-sizing: border-box; }
+#app [hidden] { display:none !important; }
+#app button { font-family:inherit; color:inherit; -webkit-tap-highlight-color:transparent; }
+#app .app-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+#app h1 { font-size:20px; margin:0 0 4px; }
+#app .sub { font-size:13px; color:#666; margin-bottom:16px; }
+#app .bell-btn { background:#fff; border:1px solid #e5e5e5; border-radius:999px; width:40px; height:40px; font-size:18px; cursor:pointer; flex:none; }
+#app .date-row { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+#app .date-row input[type=date] { flex:1; padding:8px 10px; border:1px solid #ddd; border-radius:8px; font-size:14px; background:#fff; }
+
+/* 今日まだ記録していないときのリマインダー */
+#app .reminder { display:flex; align-items:center; gap:10px; background:#fff; border:2px solid #e05a2b; border-radius:12px; padding:12px 14px; margin-bottom:14px; box-shadow:0 2px 10px rgba(224,90,43,.15); }
+#app .reminder-text { flex:1; font-size:14px; font-weight:700; color:#c94a1f; line-height:1.4; }
+#app .reminder button { background:#e05a2b; color:#fff; border:none; border-radius:8px; padding:9px 12px; font-size:13px; font-weight:700; cursor:pointer; flex:none; }
+#app .reminder.late { background:#e05a2b; animation:tm-pulse 2s ease-in-out infinite; }
+#app .reminder.late .reminder-text { color:#fff; }
+#app .reminder.late button { background:#fff; color:#e05a2b; }
+@keyframes tm-pulse { 0%,100% { box-shadow:0 2px 10px rgba(224,90,43,.25); } 50% { box-shadow:0 2px 18px rgba(224,90,43,.6); } }
+
+#app .streak-banner { display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg,#fff3ea,#ffe4d1); border:1px solid #f3c8a6; border-radius:12px; padding:12px 14px; margin-bottom:16px; }
+#app .streak-main { font-size:15px; font-weight:700; color:#c94a1f; }
+#app .streak-num { font-size:22px; }
+#app .streak-sub { font-size:12px; color:#8a6a52; text-align:right; }
+
+#app .section-title { font-size:14px; font-weight:700; margin:18px 0 8px; color:#333; }
+#app .cat-block { margin-bottom:14px; }
+#app .cat-label { font-size:13px; font-weight:600; color:#555; margin-bottom:6px; }
+#app .variant-row { display:flex; gap:8px; flex-wrap:wrap; }
+#app .variant-btn { padding:8px 14px; border-radius:999px; border:1.5px solid #ddd; background:#fff; font-size:14px; cursor:pointer; }
+#app .variant-btn.selected { background:#e05a2b; border-color:#e05a2b; color:#fff; font-weight:600; }
+#app .variant-btn.small { padding:5px 10px; font-size:12.5px; }
+
+#app .preset-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+#app .preset-chip { padding:6px 12px; border-radius:999px; background:#f0f0f0; border:none; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; }
+#app .preset-chip:hover { background:#e5e5e5; }
+#app .preset-chip .pc-del { color:#bbb; font-size:12px; padding:2px 0 2px 4px; }
+#app .preset-chip .pc-del:hover { color:#c33; }
+
+#app .btn-outline { background:#fff; border:1.5px solid #e05a2b; color:#e05a2b; border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer; font-weight:600; }
+#app .btn-outline:hover { background:#fff3ee; }
+#app .btn-outline:disabled { opacity:.4; cursor:default; }
+#app .btn-main { background:#e05a2b; color:#fff; border:none; border-radius:8px; padding:11px 16px; font-size:14px; cursor:pointer; font-weight:600; width:100%; }
+#app .btn-main:hover { background:#c94a1f; }
+#app .btn-main:disabled { opacity:.4; cursor:default; }
+
+#app .combo-summary { font-size:13px; color:#666; background:#f7f7f7; border-radius:8px; padding:8px 10px; margin:10px 0; }
+#app .rest-banner { font-size:13px; color:#a15c00; background:#fff6e0; border-radius:8px; padding:8px 10px; margin:10px 0; }
+
+#app .group-header { font-size:13px; font-weight:700; color:#e05a2b; margin:16px 0 6px; padding-bottom:4px; border-bottom:2px solid #f0d8cc; }
+#app .item { border:1px solid #e5e5e5; border-radius:12px; padding:10px 12px; margin-bottom:8px; background:#fff; }
+#app .item.done { background:#fff6f0; border-color:#f0c4a6; }
+#app .item-top { display:flex; align-items:center; gap:10px; }
+#app .checkbox { width:22px; height:22px; flex:none; accent-color:#e05a2b; cursor:pointer; }
+#app .item-name { flex:1; font-size:15px; font-weight:600; background:transparent; border:none; outline:none; width:100%; padding:2px 0; }
+#app .del-btn { background:none; border:none; color:#bbb; font-size:16px; cursor:pointer; padding:2px 6px; flex:none; }
+#app .del-btn:hover { color:#c33; }
+
+#app .sets-list { margin-top:8px; display:flex; flex-direction:column; gap:6px; }
+#app .set-row { display:flex; align-items:center; gap:6px; }
+#app .set-label { font-size:11px; color:#999; width:44px; flex:none; }
+#app .set-row input { padding:7px 8px; border:1px solid #ddd; border-radius:8px; font-size:14px; width:70px; }
+#app .set-x { font-size:12px; color:#999; }
+#app .set-del { background:none; border:none; color:#ccc; font-size:14px; cursor:pointer; }
+#app .set-del:hover { color:#c33; }
+#app .add-set-btn { align-self:flex-start; background:none; border:1px dashed #ccc; color:#888; border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer; margin-top:2px; }
+#app .add-set-btn:hover { border-color:#e05a2b; color:#e05a2b; }
+
+#app .add-row { display:flex; gap:8px; margin-top:8px; }
+#app .add-row input { flex:1; min-width:0; padding:9px 10px; border:1px dashed #ccc; border-radius:8px; font-size:14px; }
+#app .add-row button { background:#e05a2b; color:#fff; border:none; border-radius:8px; padding:9px 14px; font-size:13px; cursor:pointer; font-weight:600; }
+
+#app .status { text-align:center; font-size:12px; color:#888; margin-top:10px; min-height:16px; }
+#app .history-toggle, #app .edit-toggle, #app .rotation-toggle, #app .notify-toggle, #app .backup-toggle { text-align:center; font-size:12.5px; color:#888; margin-top:16px; cursor:pointer; text-decoration:underline; }
+#app .history-list { margin-top:10px; font-size:13px; }
+#app .history-day { border-top:1px solid #eee; padding:8px 0; }
+#app .history-day .hd-date { font-weight:600; margin-bottom:2px; }
+#app .history-day .hd-combo { color:#e05a2b; font-size:12px; margin-bottom:4px; }
+#app .history-day .hd-item { color:#555; font-size:12.5px; margin-bottom:2px; }
+#app .loading { text-align:center; color:#999; padding:30px 0; }
+#app .rebuild-note { font-size:12px; color:#999; margin-top:6px; }
+
+#app .sched-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:6px; }
+#app .sched-nav-btns { display:flex; gap:6px; align-items:center; }
+#app .sched-nav button { background:#f0f0f0; border:none; border-radius:6px; padding:6px 10px; font-size:13px; cursor:pointer; }
+#app .sched-nav button.active { background:#e05a2b; color:#fff; }
+#app .sched-label { font-size:13px; font-weight:700; text-align:center; }
+#app .week-row { display:flex; gap:4px; }
+#app .week-cell { flex:1; min-width:0; border:1px solid #e5e5e5; border-radius:10px; padding:8px 2px; text-align:center; cursor:pointer; background:#fff; }
+#app .week-cell.today { border-color:#e05a2b; border-width:2px; }
+#app .week-cell .wc-dow { font-size:11px; color:#999; }
+#app .week-cell .wc-date { font-size:14px; font-weight:700; margin:2px 0; }
+#app .week-cell .wc-combo { font-size:10px; color:#666; min-height:14px; word-break:break-all; line-height:1.25; }
+#app .wc-dot { width:8px; height:8px; border-radius:50%; margin:4px auto 0; }
+#app .dot-done { background:#2e9e44; }
+#app .dot-partial { background:#e0a02b; }
+#app .dot-none { background:#ddd; }
+#app .dot-rest { background:transparent; border:1px solid #ccc; }
+
+#app .month-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+#app .month-dow { font-size:11px; color:#999; text-align:center; padding-bottom:4px; }
+#app .month-cell { border:1px solid #eee; border-radius:8px; min-height:56px; padding:4px 3px; font-size:11px; cursor:pointer; background:#fff; overflow:hidden; }
+#app .month-cell.blank { border:none; cursor:default; background:transparent; }
+#app .month-cell.today { border-color:#e05a2b; border-width:2px; }
+#app .month-cell .mc-date { font-weight:700; font-size:12px; }
+#app .month-cell .mc-combo { color:#777; font-size:9.5px; margin-top:2px; word-break:break-all; line-height:1.2; }
+#app .month-cell .wc-dot { margin:3px 0 0; width:6px; height:6px; }
+
+#app .rot-row { background:#fff; border:1px solid #eee; border-radius:10px; padding:10px; margin-bottom:8px; }
+#app .rot-row-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+#app .rot-dow { font-weight:700; font-size:13px; }
+#app .rot-rest-btn { background:#f0f0f0; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
+#app .rot-rest-btn.on { background:#a15c00; color:#fff; }
+#app .rot-cats { display:flex; flex-direction:column; gap:6px; }
+#app .rot-cat-line { display:flex; align-items:center; gap:8px; }
+#app .rot-cat-name { font-size:11.5px; color:#888; width:76px; flex:none; }
+
+/* 通知・バックアップ設定 */
+#app .panel { background:#fff; border:1px solid #eee; border-radius:12px; padding:14px; margin-top:10px; font-size:13px; }
+#app .panel h3 { font-size:14px; margin:0 0 10px; }
+#app .panel .row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+#app .panel input[type=time] { padding:7px 10px; border:1px solid #ddd; border-radius:8px; font-size:16px; background:#fff; }
+#app .panel .btns { display:flex; gap:8px; flex-wrap:wrap; }
+#app .panel .note { font-size:12px; color:#777; line-height:1.6; margin-top:10px; }
+#app .panel .warn { font-size:12.5px; color:#8a4b00; background:#fff6e0; border-radius:8px; padding:10px; line-height:1.6; margin-bottom:12px; }
+#app .panel .state { font-size:12.5px; line-height:1.8; background:#f7f7f7; border-radius:8px; padding:8px 10px; margin-bottom:12px; }
+#app .panel .ok { color:#2e9e44; font-weight:700; }
+#app .panel .ng { color:#c33; font-weight:700; }
+#app .panel .msg { font-size:12px; color:#555; margin-top:8px; min-height:16px; }
+
+/* iPhone でフォーカス時に画面が勝手に拡大されないよう、スマホ幅では入力欄を 16px 以上にする */
+@media (max-width: 600px) {
+  #app input[type=text], #app input[type=number], #app input[type=date], #app .item-name, #app .set-row input, #app .add-row input { font-size:16px; }
+  #app .set-row input { width:74px; }
+}

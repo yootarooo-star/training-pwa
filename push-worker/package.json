@@ -1,0 +1,10 @@
+{
+  "name": "training-push",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen-keys": "node scripts/gen-vapid-keys.mjs",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
+  }
+}
