@@ -119,6 +119,27 @@ body { overscroll-behavior-y:none; }
 #app .rot-cat-line { display:flex; align-items:center; gap:8px; }
 #app .rot-cat-name { font-size:11.5px; color:#888; width:76px; flex:none; }
 
+/* 今日以外の日を開いているとき */
+#app .editing-banner { display:flex; align-items:center; gap:10px; background:#eef4ff; border:1.5px solid #b9cdf2; border-radius:10px; padding:10px 12px; margin-bottom:14px; }
+#app .editing-banner span { flex:1; font-size:13.5px; font-weight:700; color:#2b4c8c; }
+#app .editing-banner button { background:#fff; border:1px solid #b9cdf2; color:#2b4c8c; border-radius:8px; padding:7px 10px; font-size:12.5px; font-weight:700; cursor:pointer; flex:none; }
+
+/* 総重量・回数のみ */
+#app .sets-foot { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#app .sets-foot .add-set-btn { margin-top:0; }
+#app .mode-btn { background:none; border:1px solid #e5e5e5; color:#888; border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer; }
+#app .mode-btn:hover { border-color:#e05a2b; color:#e05a2b; }
+#app .item-vol { margin-left:auto; font-size:12px; font-weight:700; color:#c94a1f; }
+#app .day-total { font-size:13.5px; color:#555; background:#fff; border:1px solid #eee; border-radius:10px; padding:10px 12px; margin:10px 0 8px; text-align:center; }
+#app .day-total b, #app .sched-total b { color:#c94a1f; font-size:15px; }
+#app .sep { color:#ccc; margin:0 8px; }
+#app .sched-total { font-size:12.5px; color:#555; text-align:center; margin-top:8px; }
+#app .mode-chip { background:#f0f0f0; border:none; border-radius:6px; padding:5px 8px; font-size:11.5px; color:#666; cursor:pointer; flex:none; }
+#app .mode-chip.on { background:#fff0e8; color:#c94a1f; font-weight:700; }
+#app .history-day .hd-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:2px; }
+#app .history-day .hd-vol { font-weight:600; font-size:12px; color:#c94a1f; margin-left:8px; }
+#app .hd-edit { background:#fff; border:1px solid #e05a2b; color:#e05a2b; border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer; flex:none; }
+
 /* 通知・バックアップ設定 */
 #app .panel { background:#fff; border:1px solid #eee; border-radius:12px; padding:14px; margin-top:10px; font-size:13px; }
 #app .panel h3 { font-size:14px; margin:0 0 10px; }

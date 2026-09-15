@@ -76,6 +76,8 @@
   let scheduleMode = 'week';
   let scheduleRefDate = new Date();
   let lastToday = todayStr();
+  let viewingDate = null;  // いま画面に出している日付
+  let dirty = false;       // 保存していない変更があるか
   const dayCache = {};
 
   const $ = id => document.getElementById(id);
@@ -107,6 +109,13 @@
   const notifyArea = $('notifyArea');
   const backupToggle = $('backupToggle');
   const backupArea = $('backupArea');
+  const editingBanner = $('editingBanner');
+  const editingText = $('editingText');
+  const comboTitle = $('comboTitle');
+  const buildBtn = $('buildBtn');
+  const saveDayBtn = $('saveDayBtn');
+  const dayTotal = $('dayTotal');
+  const schedTotal = $('schedTotal');
 
   dateInput.value = todayStr();
 
@@ -137,6 +146,32 @@
   function comboAbbrev(sel){
     if (!sel) return '';
     return categories.map(cat => { const v = cat.variants.find(v => v.id === sel[cat.id]); return v ? v.label : '?'; }).join('/');
+  }
+
+  const JP_DOW = ['日','月','火','水','木','金','土'];
+  function mdLabel(dateStr){
+    const d = parseDateStr(dateStr);
+    const y = d.getFullYear() !== new Date().getFullYear() ? `${d.getFullYear()}/` : '';
+    return `${y}${d.getMonth()+1}/${d.getDate()}（${JP_DOW[d.getDay()]}）`;
+  }
+
+  // ---------- 総重量（重さ × 回数の合計） ----------
+  const num = v => { const n = parseFloat(v); return isFinite(n) && n > 0 ? n : 0; };
+  function itemVolume(item){
+    if (item.repsOnly) return 0;
+    return (item.sets || []).reduce((sum, s) => sum + num(s.weight) * num(s.reps), 0);
+  }
+  // 1日の総重量は、チェックを付けた（実施した）種目だけを数える
+  function dayVolume(items){ return (items || []).filter(i => i.checked).reduce((sum, i) => sum + itemVolume(i), 0); }
+  const fmtKg = n => n.toLocaleString('ja-JP', { maximumFractionDigits:1 }) + 'kg';
+
+  function setsText(item){
+    const sets = item.sets || (item.weight || item.reps ? [{ weight:item.weight, reps:item.reps }] : []);
+    return sets.map(s => {
+      const w = !item.repsOnly && num(s.weight) ? s.weight : '';
+      if (!w && !s.reps) return null;
+      return w ? `${w}kg×${s.reps || '-'}` : `${s.reps}回`;
+    }).filter(Boolean).join(', ');
   }
 
   function renderCategoryPicker(){
@@ -182,9 +217,17 @@
 
   function defaultSetsFor(catId, it){
     const count = catId === 'training' ? 3 : 1;
-    const w = it && it.defaultWeight ? it.defaultWeight : '';
+    const w = it && it.defaultWeight && !it.repsOnly ? it.defaultWeight : '';
     const r = it && it.defaultReps ? it.defaultReps : '';
     return Array.from({length: count}, () => ({ weight:w, reps:r }));
+  }
+
+  // 記録画面で「回数だけ」に切り替えたら、種目リスト側にも覚えさせて次回から同じにする
+  function rememberRepsOnly(item){
+    const cat = categories.find(c => c.id === item.categoryId);
+    if (!cat) return;
+    const t = cat.variants.flatMap(v => v.items).find(t => item.templateId ? t.id === item.templateId : t.name === item.name);
+    if (t) { t.repsOnly = !!item.repsOnly; saveCategories(); }
   }
 
   function buildItemsFromSelections(){
@@ -193,7 +236,7 @@
       const variant = cat.variants.find(v => v.id === selections[cat.id]);
       if (!variant) return;
       variant.items.forEach(it => {
-        items.push({ id: uid(), name: it.name, checked:false, categoryId: cat.id, sets: defaultSetsFor(cat.id, it), groupLabel:`${cat.label} ${variant.label}` });
+        items.push({ id: uid(), templateId: it.id, name: it.name, checked:false, categoryId: cat.id, repsOnly: !!it.repsOnly, sets: defaultSetsFor(cat.id, it), groupLabel:`${cat.label} ${variant.label}` });
       });
     });
     return items;
@@ -203,6 +246,7 @@
     if (Object.keys(selections).filter(k => selections[k]).length < categories.length) { alert('すべてのカテゴリーを選択してください'); return; }
     currentItems = buildItemsFromSelections();
     dayHasRecord = false;
+    dirty = true;
     showChecklist();
   });
 
@@ -231,9 +275,10 @@
       const setsHtml = item.sets.map((s, si) => `
         <div class="set-row">
           <span class="set-label">セット${si+1}</span>
-          <input type="number" inputmode="decimal" placeholder="kg" value="${escapeHtml(String(s.weight ?? ''))}" data-id="${item.id}" data-setidx="${si}" data-role="setweight" />
-          <span class="set-x">×</span>
+          ${item.repsOnly ? '' : `<input type="number" inputmode="decimal" placeholder="kg" value="${escapeHtml(String(s.weight ?? ''))}" data-id="${item.id}" data-setidx="${si}" data-role="setweight" />
+          <span class="set-x">×</span>`}
           <input type="number" inputmode="numeric" placeholder="回" value="${escapeHtml(String(s.reps ?? ''))}" data-id="${item.id}" data-setidx="${si}" data-role="setreps" />
+          ${item.repsOnly ? '<span class="set-x">回</span>' : ''}
           ${item.sets.length > 1 ? `<button class="set-del" data-id="${item.id}" data-setidx="${si}" data-role="setdel">✕</button>` : ''}
         </div>`).join('');
       div.innerHTML = `
@@ -244,44 +289,59 @@
         </div>
         <div class="sets-list">
           ${setsHtml}
-          <button class="add-set-btn" data-id="${item.id}" data-role="addset">＋ セット追加</button>
+          <div class="sets-foot">
+            <button class="add-set-btn" data-id="${item.id}" data-role="addset">＋ セット追加</button>
+            <button class="mode-btn" data-id="${item.id}" data-role="mode">${item.repsOnly ? 'kgも入力する' : '回数だけにする'}</button>
+            <span class="item-vol" data-vol="${item.id}"></span>
+          </div>
         </div>`;
       itemsContainer.appendChild(div);
     });
-    attachItemListeners();
+    updateTotals();
   }
 
-  function attachItemListeners(){
-    itemsContainer.querySelectorAll('[data-role="check"]').forEach(el => el.addEventListener('change', e => {
-      const item = currentItems.find(i => i.id === e.target.dataset.id);
-      if (item) item.checked = e.target.checked;
-      e.target.closest('.item').classList.toggle('done', item.checked);
-    }));
-    itemsContainer.querySelectorAll('[data-role="name"]').forEach(el => el.addEventListener('input', e => {
-      const item = currentItems.find(i => i.id === e.target.dataset.id); if (item) item.name = e.target.value;
-    }));
-    itemsContainer.querySelectorAll('[data-role="del"]').forEach(el => el.addEventListener('click', e => {
-      currentItems = currentItems.filter(i => i.id !== e.target.dataset.id); renderItems();
-    }));
-    itemsContainer.querySelectorAll('[data-role="setweight"]').forEach(el => el.addEventListener('input', e => {
-      const item = currentItems.find(i => i.id === e.target.dataset.id);
-      if (item) item.sets[Number(e.target.dataset.setidx)].weight = e.target.value;
-    }));
-    itemsContainer.querySelectorAll('[data-role="setreps"]').forEach(el => el.addEventListener('input', e => {
-      const item = currentItems.find(i => i.id === e.target.dataset.id);
-      if (item) item.sets[Number(e.target.dataset.setidx)].reps = e.target.value;
-    }));
-    itemsContainer.querySelectorAll('[data-role="setdel"]').forEach(el => el.addEventListener('click', e => {
-      const item = currentItems.find(i => i.id === e.target.dataset.id);
-      if (item) item.sets.splice(Number(e.target.dataset.setidx), 1);
-      renderItems();
-    }));
-    itemsContainer.querySelectorAll('[data-role="addset"]').forEach(el => el.addEventListener('click', e => {
-      const item = currentItems.find(i => i.id === e.target.dataset.id);
-      if (item) item.sets.push({ weight:'', reps:'' });
-      renderItems();
-    }));
+  function updateTotals(){
+    currentItems.forEach(item => {
+      const el = itemsContainer.querySelector(`[data-vol="${item.id}"]`);
+      if (el) { const v = itemVolume(item); el.textContent = v ? `計 ${fmtKg(v)}` : ''; }
+    });
+    const doneCount = currentItems.filter(i => i.checked).length;
+    dayTotal.innerHTML = `完了 <b>${doneCount}</b> / ${currentItems.length} 種目<span class="sep">｜</span>総重量 <b>${fmtKg(dayVolume(currentItems))}</b>`;
   }
+
+  // チェックリストの操作は、親要素でまとめて受け取る（描画のたびに付け直さなくて済む）
+  const findItem = el => currentItems.find(i => i.id === el.dataset.id);
+  itemsContainer.addEventListener('input', e => {
+    const el = e.target, item = findItem(el);
+    if (!item) return;
+    const role = el.dataset.role;
+    if (role === 'name') item.name = el.value;
+    else if (role === 'setweight') item.sets[Number(el.dataset.setidx)].weight = el.value;
+    else if (role === 'setreps') item.sets[Number(el.dataset.setidx)].reps = el.value;
+    else return;
+    dirty = true; updateTotals();
+  });
+  itemsContainer.addEventListener('change', e => {
+    const el = e.target;
+    if (el.dataset.role !== 'check') return;
+    const item = findItem(el);
+    if (!item) return;
+    item.checked = el.checked;
+    el.closest('.item').classList.toggle('done', item.checked);
+    dirty = true; updateTotals();
+  });
+  itemsContainer.addEventListener('click', e => {
+    const el = e.target.closest('button[data-role]');
+    const item = el && findItem(el);
+    if (!item) return;
+    const role = el.dataset.role;
+    if (role === 'del') currentItems = currentItems.filter(i => i !== item);
+    else if (role === 'setdel') item.sets.splice(Number(el.dataset.setidx), 1);
+    else if (role === 'addset') item.sets.push({ weight:'', reps:'' });
+    else if (role === 'mode') { item.repsOnly = !item.repsOnly; rememberRepsOnly(item); }
+    else return;
+    dirty = true; renderItems();
+  });
 
   $('saveDayBtn').addEventListener('click', async () => {
     statusMsg.textContent = '保存中...';
@@ -291,7 +351,10 @@
     statusMsg.textContent = ok ? `✓ ${dateStr} の記録を保存しました` : '保存に失敗しました（端末の空き容量を確認してください）';
     dayHasRecord = ok || dayHasRecord;
     if (ok) {
+      dirty = false;
+      updateEditingUI();
       rebuildNoteWrap.style.display = 'block';
+      if (historyList.style.display !== 'none') renderHistory();
       renderSchedule();
       renderStreak();
       if (dateStr === todayStr()) TMNotify.syncStatus(dateStr, dayIsDone(record));
@@ -303,6 +366,8 @@
   function rotationForDate(d){ return rotation[String(d.getDay())] || null; }
 
   async function initForDate(dateStr){
+    viewingDate = dateStr;
+    dirty = false;
     const d = parseDateStr(dateStr);
     const rec = await loadDay(dateStr);
     if (rec) {
@@ -325,16 +390,41 @@
       renderCategoryPicker(); updateComboSummary();
       comboSection.style.display = 'block'; rebuildNoteWrap.style.display = 'none'; checklistWrap.style.display = 'none';
     }
+    updateEditingUI();
   }
 
+  // 別の日に移る。保存していない変更があれば確認し、やめたら false を返す
   async function goToDate(dateStr){
+    if (dateStr === viewingDate) { dateInput.value = dateStr; return true; }
+    if (dirty && !confirm('保存していない変更があります。保存せずに移動しますか？')) { dateInput.value = viewingDate; return false; }
     dateInput.value = dateStr;
     scheduleRefDate = parseDateStr(dateStr);
     await initForDate(dateStr);
     renderSchedule();
+    return true;
   }
 
-  dateInput.addEventListener('change', () => { if (dateInput.value) goToDate(dateInput.value); });
+  // 今日以外の日を開いているときは、どの日を編集しているかをはっきり見せる
+  function updateEditingUI(){
+    const dateStr = viewingDate || dateInput.value;
+    const today = todayStr();
+    const isToday = dateStr === today;
+    const label = mdLabel(dateStr);
+    editingBanner.hidden = isToday;
+    if (!isToday) {
+      editingText.textContent = dateStr > today ? `📅 ${label}（先の予定）を表示中`
+        : dayHasRecord ? `✏️ ${label}の記録を修正中` : `✏️ ${label}の記録を後から追加`;
+    }
+    const dayName = isToday ? '今日' : label;
+    comboTitle.textContent = `${dayName}の組み合わせを選ぶ`;
+    buildBtn.textContent = `この内容で${dayName}のメニューを作成`;
+    saveDayBtn.textContent = `${dayName}の記録を保存`;
+  }
+
+  dateInput.addEventListener('change', () => { if (dateInput.value) goToDate(dateInput.value); else dateInput.value = viewingDate; });
+  $('backTodayBtn').addEventListener('click', async () => {
+    if (await goToDate(todayStr())) window.scrollTo({ top:0, behavior:'smooth' });
+  });
 
   // ---------- history ----------
   historyToggle.addEventListener('click', async () => {
@@ -351,15 +441,24 @@
         const rec = await loadDay(d);
         if (!rec) continue;
         const doneItems = (rec.items || []).filter(i => i.checked);
-        html += `<div class="history-day"><div class="hd-date">${d}</div><div class="hd-combo">${escapeHtml(comboLabel(rec.selections || {}))}</div>`;
+        const vol = dayVolume(rec.items);
+        html += `<div class="history-day">
+          <div class="hd-head">
+            <div class="hd-date">${mdLabel(d)}${vol ? `<span class="hd-vol">総重量 ${fmtKg(vol)}</span>` : ''}</div>
+            <button class="hd-edit" data-edit="${d}">修正する</button>
+          </div>
+          <div class="hd-combo">${escapeHtml(comboLabel(rec.selections || {}))}</div>`;
         doneItems.forEach(i => {
-          const sets = i.sets || (i.weight || i.reps ? [{weight:i.weight, reps:i.reps}] : []);
-          const setStr = sets.map(s => (s.weight || s.reps) ? `${s.weight||'-'}kg×${s.reps||'-'}` : null).filter(Boolean).join(', ');
+          const setStr = setsText(i);
           html += `<div class="hd-item">✓ ${escapeHtml(i.name)}${setStr ? ' — ' + escapeHtml(setStr) : ''}</div>`;
         });
+        if (!doneItems.length) html += '<div class="hd-item" style="color:#999;">完了した種目はありません</div>';
         html += '</div>';
       }
       historyList.innerHTML = html || '<div style="color:#999;">まだ記録がありません</div>';
+      historyList.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', async () => {
+        if (await goToDate(btn.dataset.edit)) checklistWrap.scrollIntoView({ behavior:'smooth', block:'start' });
+      }));
     } catch(e) { historyList.innerHTML = '<div style="color:#c33;">読み込みに失敗しました</div>'; }
   }
 
@@ -423,7 +522,7 @@
       const done = (rec.items||[]).filter(i=>i.checked).length;
       let dot = 'dot-none';
       if (total>0 && done===total) dot='dot-done'; else if (done>0) dot='dot-partial';
-      return { dateStr, label: comboAbbrev(rec.selections), dot, planned:false };
+      return { dateStr, label: comboAbbrev(rec.selections), dot, planned:false, done: done > 0, volume: dayVolume(rec.items) };
     }
     const rot = rotationForDate(d);
     if (rot && rot.rest) return { dateStr, label:'休', dot:'dot-rest', planned:true };
@@ -437,6 +536,7 @@
       const dates = getWeekDates(scheduleRefDate);
       schedLabel.textContent = `${dates[0].getMonth()+1}/${dates[0].getDate()} 〜 ${dates[6].getMonth()+1}/${dates[6].getDate()}`;
       const infos = await Promise.all(dates.map(cellInfo));
+      showPeriodTotal('この週', infos);
       scheduleGrid.innerHTML = `<div class="week-row">${infos.map((info,i) => `
         <div class="week-cell ${info.dateStr===today?'today':''}" data-date="${info.dateStr}">
           <div class="wc-dow">${DOW_LABELS[i]}</div>
@@ -456,6 +556,7 @@
       for (let dnum=1; dnum<=daysInMonth; dnum++) cells.push(new Date(y,m,dnum));
       while (cells.length % 7 !== 0) cells.push(null);
       const infos = await Promise.all(cells.map(c => c ? cellInfo(c) : Promise.resolve(null)));
+      showPeriodTotal('この月', infos.filter(Boolean));
       let html = `<div class="month-grid">${DOW_LABELS.map(l=>`<div class="month-dow">${l}</div>`).join('')}`;
       cells.forEach((c, idx) => {
         if (!c) { html += `<div class="month-cell blank"></div>`; return; }
@@ -470,11 +571,15 @@
       scheduleGrid.innerHTML = html;
     }
     scheduleGrid.querySelectorAll('[data-date]').forEach(el => el.addEventListener('click', async () => {
-      dateInput.value = el.dataset.date;
-      await initForDate(el.dataset.date);
-      comboSection.scrollIntoView({behavior:'smooth', block:'start'});
-      if (comboSection.style.display === 'none') checklistWrap.scrollIntoView({behavior:'smooth', block:'start'});
+      if (!(await goToDate(el.dataset.date))) return;
+      (comboSection.style.display === 'none' ? checklistWrap : comboSection).scrollIntoView({behavior:'smooth', block:'start'});
     }));
+  }
+
+  function showPeriodTotal(label, infos){
+    const vol = infos.reduce((sum, i) => sum + (i.volume || 0), 0);
+    const days = infos.filter(i => i.done).length;
+    schedTotal.innerHTML = `${label}：トレーニング <b>${days}</b>日<span class="sep">｜</span>総重量 <b>${fmtKg(vol)}</b>`;
   }
 
   // ---------- rotation editor ----------
@@ -523,7 +628,8 @@
     else { editArea.style.display='none'; editToggle.textContent='種目を編集する'; }
   });
   function renderEditArea(){
-    editArea.innerHTML = '<button class="btn-outline" id="resetToInitialBtn" style="margin-top:10px;">最新の初期データで種目リストを上書きする</button>' + categories.map(cat => `
+    editArea.innerHTML = '<button class="btn-outline" id="resetToInitialBtn" style="margin-top:10px;">最新の初期データで種目リストを上書きする</button>'
+      + '<div class="rebuild-note">種目名の右のボタンで「kg×回」と「回数のみ」（自重の種目など）を切り替えられます。</div>' + categories.map(cat => `
       <div class="section-title" style="margin-top:16px;display:flex;align-items:center;gap:8px;">
         <input type="text" class="category-name-input" data-cat="${cat.id}" value="${escapeHtml(cat.label)}" style="font-weight:700;border:1px solid #ddd;border-radius:6px;padding:5px 8px;width:170px;max-width:55%;" />
         <button class="del-btn" data-catdel="${cat.id}" style="font-size:12px;">✕ カテゴリー削除</button>
@@ -549,6 +655,7 @@
       listDiv.innerHTML = v.items.map(it => `
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
           <input type="text" value="${escapeHtml(it.name)}" data-editname="${it.id}" data-cat="${cat.id}" data-variant="${v.id}" style="flex:1;min-width:0;padding:6px 8px;border:1px solid #ddd;border-radius:6px;" />
+          <button class="mode-chip ${it.repsOnly ? 'on' : ''}" data-editreps="${it.id}" data-cat="${cat.id}" data-variant="${v.id}">${it.repsOnly ? '回数のみ' : 'kg×回'}</button>
           <button data-editdel="${it.id}" data-cat="${cat.id}" data-variant="${v.id}" style="background:none;border:none;color:#bbb;cursor:pointer;padding:6px;">✕</button>
         </div>`).join('');
     }));
@@ -634,6 +741,13 @@
       variant.items = variant.items.filter(i => i.id !== e.target.dataset.editdel);
       await saveCategories(); renderEditArea();
     }));
+    editArea.querySelectorAll('[data-editreps]').forEach(el => el.addEventListener('click', async () => {
+      const cat = categories.find(c => c.id === el.dataset.cat);
+      const variant = cat.variants.find(v => v.id === el.dataset.variant);
+      const it = variant.items.find(i => i.id === el.dataset.editreps);
+      if (it) it.repsOnly = !it.repsOnly;
+      await saveCategories(); renderEditArea();
+    }));
     editArea.querySelectorAll('[data-addbtn]').forEach(btn => btn.addEventListener('click', async () => {
       const input = editArea.querySelector(`[data-addvariant="${btn.dataset.addbtn}"]`);
       const name = input.value.trim(); if (!name) return;
@@ -676,7 +790,7 @@
     lastToday = t;
     // メニュー入力中（未保存の可能性あり）のときは画面を切り替えない
     if (wasViewingToday && checklistWrap.style.display === 'none') await goToDate(t);
-    else renderSchedule();
+    else { renderSchedule(); updateEditingUI(); }
     renderStreak();
   }
 
