@@ -117,6 +117,7 @@
   const saveDayBtn = $('saveDayBtn');
   const dayTotal = $('dayTotal');
   const schedTotal = $('schedTotal');
+  const calLegend = $('calLegend');
 
   dateInput.value = todayStr();
 
@@ -144,9 +145,11 @@
   function comboLabel(sel){
     return categories.map(cat => { const v = cat.variants.find(v => v.id === sel[cat.id]); return v ? `${cat.label}${v.label}` : null; }).filter(Boolean).join(' / ');
   }
-  function comboAbbrev(sel){
-    if (!sel) return '';
-    return categories.map(cat => { const v = cat.variants.find(v => v.id === sel[cat.id]); return v ? v.label : '?'; }).join('/');
+  // ---------- カレンダーの色分け（「トレーニング」のバリエーションごと） ----------
+  const VARIANT_COLORS = ['#e5484d','#2f7ed8','#2e9e44','#8e44ad','#d4a017','#16a2a2','#d6336c','#6c757d'];
+  function colorCategory(){ return categories.find(c => c.id === 'training') || categories[0]; }
+  function variantColor(cat, v){
+    return /^#[0-9a-f]{6}$/i.test(v.color || '') ? v.color : VARIANT_COLORS[cat.variants.indexOf(v) % VARIANT_COLORS.length];
   }
 
   const JP_DOW = ['日','月','火','水','木','金','土'];
@@ -523,16 +526,41 @@
       const done = (rec.items||[]).filter(i=>i.checked).length;
       let dot = 'dot-none';
       if (total>0 && done===total) dot='dot-done'; else if (done>0) dot='dot-partial';
-      return { dateStr, label: comboAbbrev(rec.selections), dot, planned:false, done: done > 0, volume: dayVolume(rec.items) };
+      return { dateStr, sel: rec.selections || {}, dot, planned:false, done: done > 0, volume: dayVolume(rec.items) };
     }
     const rot = rotationForDate(d);
-    if (rot && rot.rest) return { dateStr, label:'休', dot:'dot-rest', planned:true };
-    if (rot) return { dateStr, label: comboAbbrev(rot), dot:'dot-none', planned:true };
-    return { dateStr, label:'', dot:'dot-none', planned:true };
+    if (rot && rot.rest) return { dateStr, rest:true, dot:'dot-rest', planned:true };
+    if (rot) return { dateStr, sel: rot, dot:'dot-none', planned:true };
+    return { dateStr, dot:'dot-none', planned:true };
+  }
+
+  // カレンダー1日分の中身：色付きのトレーニング名（予定は点線）＋ その日の総重量
+  function cellBody(info, showOthers){
+    let html = '';
+    if (info.rest) html += '<div class="cal-rest">休</div>';
+    else if (info.sel) {
+      const main = colorCategory();
+      const mv = main && main.variants.find(v => v.id === info.sel[main.id]);
+      if (mv) html += `<span class="cal-chip${info.planned ? ' planned' : ''}" style="--c:${variantColor(main, mv)}">${escapeHtml(mv.label)}</span>`;
+      if (showOthers) {
+        const others = categories.filter(c => c !== main).map(c => (c.variants.find(v => v.id === info.sel[c.id]) || {}).label).filter(Boolean).join('/');
+        if (others) html += `<div class="cal-others">${escapeHtml(others)}</div>`;
+      }
+    }
+    if (info.volume) html += `<div class="cal-vol">${Math.round(info.volume).toLocaleString('ja-JP')}<small>kg</small></div>`;
+    return html;
+  }
+
+  function renderLegend(){
+    const main = colorCategory();
+    calLegend.innerHTML = main
+      ? main.variants.map(v => `<span><i style="--c:${variantColor(main, v)}"></i>${escapeHtml(v.label)}</span>`).join('') + '<span class="muted">点線＝予定</span>'
+      : '';
   }
 
   async function renderSchedule(){
     const today = todayStr();
+    renderLegend();
     if (scheduleMode === 'week') {
       const dates = getWeekDates(scheduleRefDate);
       schedLabel.textContent = `${dates[0].getMonth()+1}/${dates[0].getDate()} 〜 ${dates[6].getMonth()+1}/${dates[6].getDate()}`;
@@ -542,7 +570,7 @@
         <div class="week-cell ${info.dateStr===today?'today':''}" data-date="${info.dateStr}">
           <div class="wc-dow">${DOW_LABELS[i]}</div>
           <div class="wc-date">${dates[i].getDate()}</div>
-          <div class="wc-combo">${escapeHtml(info.label)}</div>
+          ${cellBody(info, true)}
           <div class="wc-dot ${info.dot}"></div>
         </div>`).join('')}</div>`;
     } else {
@@ -564,7 +592,7 @@
         const info = infos[idx];
         html += `<div class="month-cell ${info.dateStr===today?'today':''}" data-date="${info.dateStr}">
           <div class="mc-date">${c.getDate()}</div>
-          <div class="mc-combo">${escapeHtml(info.label)}</div>
+          ${cellBody(info, false)}
           ${info.planned && info.dot === 'dot-none' ? '' : `<div class="wc-dot ${info.dot}"></div>`}
         </div>`;
       });
@@ -630,7 +658,7 @@
   });
   function renderEditArea(){
     editArea.innerHTML = '<button class="btn-outline" id="resetToInitialBtn" style="margin-top:10px;">最新の初期データで種目リストを上書きする</button>'
-      + '<div class="rebuild-note">種目名の右のボタンで「kg×回」と「回数のみ」（自重の種目など）を切り替えられます。</div>' + categories.map(cat => `
+      + '<div class="rebuild-note">種目名の右のボタンで「kg×回」と「回数のみ」（自重の種目など）を切り替えられます。<br>トレーニングの各バリエーション名の左にある色見本を押すと、カレンダーの色を変えられます。</div>' + categories.map(cat => `
       <div class="section-title" style="margin-top:16px;display:flex;align-items:center;gap:8px;">
         <input type="text" class="category-name-input" data-cat="${cat.id}" value="${escapeHtml(cat.label)}" style="font-weight:700;border:1px solid #ddd;border-radius:6px;padding:5px 8px;width:170px;max-width:55%;" />
         <button class="del-btn" data-catdel="${cat.id}" style="font-size:12px;">✕ カテゴリー削除</button>
@@ -638,6 +666,7 @@
       ${cat.variants.map(v => `
         <div style="margin-bottom:10px;">
           <div class="cat-label" style="display:flex;align-items:center;gap:6px;">
+            ${cat === colorCategory() ? `<input type="color" class="variant-color" data-cat="${cat.id}" data-variant="${v.id}" value="${variantColor(cat, v)}" aria-label="カレンダーの色" />` : ''}
             <input type="text" class="variant-name-input" data-cat="${cat.id}" data-variant="${v.id}" value="${escapeHtml(v.label)}" style="font-weight:600;border:1px solid #ddd;border-radius:6px;padding:5px 8px;width:150px;max-width:45%;" />
             <span style="color:#999;">の種目</span>
             <button class="del-btn" data-catv="${cat.id}" data-variantdel="${v.id}" style="margin-left:auto;font-size:12px;">✕ 削除</button>
@@ -694,6 +723,13 @@
       await saveCategories();
       renderCategoryPicker(); updateComboSummary();
       if (rotationArea.style.display !== 'none') renderRotationArea();
+      renderSchedule();
+    }));
+    editArea.querySelectorAll('.variant-color').forEach(el => el.addEventListener('change', async e => {
+      const cat = categories.find(c => c.id === e.target.dataset.cat);
+      const variant = cat.variants.find(v => v.id === e.target.dataset.variant);
+      if (variant) variant.color = e.target.value;
+      await saveCategories();
       renderSchedule();
     }));
     editArea.querySelectorAll('[data-catdel]').forEach(el => el.addEventListener('click', async e => {
