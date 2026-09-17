@@ -9,7 +9,24 @@ body { overscroll-behavior-y:none; }
 #app .app-header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
 #app h1 { font-size:20px; margin:0 0 4px; }
 #app .sub { font-size:13px; color:#666; margin-bottom:16px; }
+#app .header-btns { display:flex; gap:8px; flex:none; }
 #app .bell-btn { background:#fff; border:1px solid #e5e5e5; border-radius:999px; width:40px; height:40px; font-size:18px; cursor:pointer; flex:none; }
+#app .menu-btn { background:#e05a2b; border-color:#e05a2b; color:#fff; font-size:17px; }
+
+/* ハンバーガーメニュー（右から出る） */
+#app .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,.35); opacity:0; pointer-events:none; transition:opacity .2s ease; z-index:20; }
+#app .drawer-overlay.open { opacity:1; pointer-events:auto; }
+#app .drawer { position:fixed; top:0; right:0; bottom:0; width:min(80vw,300px); background:#fff; box-shadow:-10px 0 30px rgba(0,0,0,.18);
+  display:flex; flex-direction:column; z-index:21; visibility:hidden; transform:translateX(100%); transition:transform .22s ease, visibility .22s;
+  padding:calc(env(safe-area-inset-top) + 16px) 0 calc(env(safe-area-inset-bottom) + 16px); }
+#app .drawer.open { visibility:visible; transform:none; }
+#app .drawer-head { display:flex; align-items:center; justify-content:space-between; padding:2px 16px 14px; font-size:15px; font-weight:700; color:#e05a2b; border-bottom:1px solid #f0f0f0; }
+#app .drawer-head button { background:none; border:none; font-size:17px; color:#bbb; cursor:pointer; padding:4px 6px; }
+#app .drawer-item { display:flex; align-items:center; gap:12px; width:100%; background:none; border:none; border-bottom:1px solid #f7f7f7;
+  padding:15px 18px; font-size:14.5px; font-weight:600; color:#333; text-align:left; cursor:pointer; }
+#app .drawer-item:active { background:#fff3ee; }
+#app .drawer-item .di-ico { width:22px; text-align:center; font-size:16px; }
+#app .drawer-foot { margin-top:auto; text-align:center; font-size:11px; color:#bbb; }
 #app .date-row { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
 #app .date-row input[type=date] { flex:1; padding:8px 10px; border:1px solid #ddd; border-radius:8px; font-size:14px; background:#fff; }
 

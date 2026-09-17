@@ -1008,6 +1008,40 @@
     notifyToggle.textContent = open ? '通知設定を閉じる' : '通知を設定する';
   }
   notifyToggle.addEventListener('click', () => openNotify(notifyArea.hidden));
+
+  // ---------- ハンバーガーメニュー ----------
+  const drawer = $('drawer');
+  const drawerOverlay = $('drawerOverlay');
+  // 画面下の各メニューを、開いてその位置まで動かすための対応表
+  const SECTIONS = {
+    today:    { el: () => comboSection.style.display === 'none' ? checklistWrap : comboSection, open: () => goToDate(todayStr()) },
+    history:  { el: () => historyList,   open: () => { if (historyList.style.display === 'none') historyToggle.click(); } },
+    growth:   { el: () => growthArea,    open: () => { if (growthArea.hidden) growthToggle.click(); } },
+    rotation: { el: () => rotationArea,  open: () => { if (rotationArea.style.display === 'none') rotationToggle.click(); } },
+    notify:   { el: () => notifyArea,    open: () => openNotify(true) },
+    edit:     { el: () => editArea,      open: () => { if (editArea.style.display === 'none') editToggle.click(); } },
+    backup:   { el: () => backupArea,    open: () => { if (backupArea.hidden) backupToggle.click(); } }
+  };
+
+  function openDrawer(open){
+    drawer.classList.toggle('open', open);
+    drawerOverlay.classList.toggle('open', open);
+    drawer.setAttribute('aria-hidden', String(!open));
+    $('menuBtn').setAttribute('aria-expanded', String(open));
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+
+  $('menuBtn').addEventListener('click', () => openDrawer(true));
+  $('drawerClose').addEventListener('click', () => openDrawer(false));
+  drawerOverlay.addEventListener('click', () => openDrawer(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') openDrawer(false); });
+  drawer.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', async () => {
+    openDrawer(false);
+    const section = SECTIONS[btn.dataset.open];
+    if (!section) return;
+    await section.open();
+    section.el().scrollIntoView({ behavior:'smooth', block:'start' });
+  }));
   $('bellBtn').addEventListener('click', () => { openNotify(true); notifyArea.scrollIntoView({ behavior:'smooth', block:'center' }); });
 
   // ---------- バックアップ ----------
@@ -1087,7 +1121,7 @@
     TMNotify.mount(notifyArea);
     await updateReminder();
 
-    $('appVersion').textContent = `バージョン ${APP_VERSION}`;
+    $('appVersion').textContent = $('drawerVersion').textContent = `バージョン ${APP_VERSION}`;
     registerServiceWorker();
     TMNotify.start();
 

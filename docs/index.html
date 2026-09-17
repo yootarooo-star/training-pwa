@@ -34,7 +34,10 @@
       <h1>💪 トレーニングメニュー</h1>
       <div class="sub">組み合わせを選んで記録、継続日数も見える化</div>
     </div>
-    <button class="bell-btn" id="bellBtn" aria-label="通知の設定">🔔</button>
+    <div class="header-btns">
+      <button class="bell-btn" id="bellBtn" aria-label="通知の設定">🔔</button>
+      <button class="bell-btn menu-btn" id="menuBtn" aria-label="メニューを開く" aria-expanded="false">☰</button>
+    </div>
   </div>
 
   <div class="reminder" id="reminderBanner" hidden>
@@ -121,6 +124,22 @@
   <div id="backupArea" hidden></div>
 
   <div class="app-version" id="appVersion"></div>
+
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <nav class="drawer" id="drawer" aria-label="メニュー" aria-hidden="true">
+    <div class="drawer-head">
+      <span>💪 メニュー</span>
+      <button id="drawerClose" aria-label="閉じる">✕</button>
+    </div>
+    <button class="drawer-item" data-open="today"><span class="di-ico">📝</span>今日の記録</button>
+    <button class="drawer-item" data-open="history"><span class="di-ico">📚</span>過去の記録</button>
+    <button class="drawer-item" data-open="growth"><span class="di-ico">📈</span>成長グラフ</button>
+    <button class="drawer-item" data-open="rotation"><span class="di-ico">🗓</span>曜日ごとの割り当て</button>
+    <button class="drawer-item" data-open="notify"><span class="di-ico">🔔</span>通知の設定</button>
+    <button class="drawer-item" data-open="edit"><span class="di-ico">✏️</span>種目を編集</button>
+    <button class="drawer-item" data-open="backup"><span class="di-ico">💾</span>データのバックアップ</button>
+    <div class="drawer-foot" id="drawerVersion"></div>
+  </nav>
 </div>
 
 <script src="config.js"></script>
