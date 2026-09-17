@@ -1,6 +1,6 @@
 // トレーニングメニュー本体（training-menu-v6.html のロジックを引き継ぎ、保存先を localStorage に変更）
 (function(){
-  const APP_VERSION = 3; // 更新して公開するたびに上げる（service-worker.js の CACHE と数字を合わせる）
+  const APP_VERSION = 4; // 更新して公開するたびに上げる（service-worker.js の CACHE と数字を合わせる）
   const pad2 = n => String(n).padStart(2,'0');
   const toDateStr = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
   const todayStr = () => toDateStr(new Date());
@@ -120,6 +120,8 @@
   const dayTotal = $('dayTotal');
   const schedTotal = $('schedTotal');
   const calLegend = $('calLegend');
+  const growthToggle = $('growthToggle');
+  const growthArea = $('growthArea');
 
   dateInput.value = todayStr();
 
@@ -410,6 +412,7 @@
       updateEditingUI();
       rebuildNoteWrap.style.display = 'block';
       if (historyList.style.display !== 'none') renderHistory();
+      if (!growthArea.hidden) renderGrowth();
       renderSchedule();
       renderStreak();
       if (dateStr === todayStr()) TMNotify.syncStatus(dateStr, dayIsDone(record));
@@ -844,6 +847,118 @@
       variant.items.push({ id: uid(), name });
       input.value=''; await saveCategories(); renderEditArea();
     }));
+  }
+
+  // ---------- 成長グラフ（日ごとの総重量） ----------
+  let growthTarget = '__all__';
+  let growthDays = 90;
+  const mdShort = ds => { const d = parseDateStr(ds); return `${d.getMonth()+1}/${d.getDate()}`; };
+  const fmtUnit = (v, unit) => Math.round(v).toLocaleString('ja-JP') + unit;
+
+  growthToggle.addEventListener('click', () => {
+    growthArea.hidden = !growthArea.hidden;
+    growthToggle.textContent = growthArea.hidden ? '成長グラフを見る' : 'グラフを閉じる';
+    if (!growthArea.hidden) renderGrowth();
+  });
+
+  // 記録済みの全日から、日ごと・種目ごとの総重量と合計回数を集める
+  async function collectGrowthData(){
+    const byName = new Map();
+    const all = [];
+    for (const d of recordedDates().sort()) {
+      const rec = await loadDay(d);
+      const items = ((rec && rec.items) || []).filter(i => i.checked);
+      if (!items.length) continue;
+      let dayVol = 0, dayReps = 0;
+      items.forEach(i => {
+        const vol = itemVolume(i);
+        const reps = (i.sets || []).reduce((a, s) => a + num(s.reps), 0);
+        dayVol += vol; dayReps += reps;
+        if (!byName.has(i.name)) byName.set(i.name, []);
+        const list = byName.get(i.name);
+        const prev = list[list.length - 1];
+        if (prev && prev.date === d) { prev.vol += vol; prev.reps += reps; } // 同じ日に同名の種目が複数あれば合算
+        else list.push({ date: d, vol, reps });
+      });
+      all.push({ date: d, vol: dayVol, reps: dayReps });
+    }
+    return { byName, all };
+  }
+
+  async function renderGrowth(){
+    growthArea.innerHTML = '<div class="loading">読み込み中...</div>';
+    const data = await collectGrowthData();
+    if (!data.all.length) { growthArea.innerHTML = '<h3>📈 成長グラフ</h3><div class="growth-empty">まだ記録がありません</div>'; return; }
+    if (growthTarget !== '__all__' && !data.byName.has(growthTarget)) growthTarget = '__all__';
+
+    const names = [...data.byName.keys()].sort((a, b) => data.byName.get(b).length - data.byName.get(a).length);
+    const raw = growthTarget === '__all__' ? data.all : data.byName.get(growthTarget);
+    const from = growthDays ? toDateStr(new Date(Date.now() - growthDays * 86400000)) : '';
+    const inRange = raw.filter(p => p.date >= from);
+    const useReps = !inRange.some(p => p.vol > 0); // 重さを使わない種目は回数で見る
+    const points = inRange.map(p => ({ date: p.date, v: useReps ? p.reps : p.vol }));
+    const unit = useReps ? '回' : 'kg';
+
+    growthArea.innerHTML = `
+      <h3>📈 成長グラフ</h3>
+      <div class="growth-controls">
+        <select id="growthSelect">
+          <option value="__all__"${growthTarget === '__all__' ? ' selected' : ''}>全体（1日の総重量）</option>
+          ${names.map(n => `<option value="${escapeHtml(n)}"${n === growthTarget ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+        </select>
+        <div class="growth-periods">
+          ${[[30,'30日'],[90,'3か月'],[365,'1年'],[0,'全期間']].map(([d, l]) => `<button data-days="${d}" class="${growthDays === d ? 'active' : ''}">${l}</button>`).join('')}
+        </div>
+      </div>
+      ${points.length
+        ? `<div class="growth-unit">${useReps ? '合計回数' : '総重量'}（${unit}）</div>` + chartSvg(points, unit) + statsHtml(points, unit)
+        : '<div class="growth-empty">この期間の記録はありません</div>'}
+      <div class="growth-detail" id="growthDetail">${points.length ? '棒を押すと、その日の数値が出ます' : ''}</div>`;
+
+    growthArea.querySelector('#growthSelect').addEventListener('change', e => { growthTarget = e.target.value; renderGrowth(); });
+    growthArea.querySelectorAll('[data-days]').forEach(btn => btn.addEventListener('click', () => { growthDays = Number(btn.dataset.days); renderGrowth(); }));
+    growthArea.querySelectorAll('.gbar').forEach(bar => bar.addEventListener('click', () => {
+      const p = points[Number(bar.dataset.i)];
+      growthArea.querySelectorAll('.gbar.sel').forEach(b => b.classList.remove('sel'));
+      bar.classList.add('sel');
+      growthArea.querySelector('#growthDetail').textContent = `${mdLabel(p.date)}　${fmtUnit(p.v, unit)}`;
+    }));
+  }
+
+  function chartSvg(points, unit){
+    const W = 320, H = 150, padT = 12, padB = 16;
+    const max = Math.max(...points.map(p => p.v)) || 1;
+    const bw = W / points.length;
+    const barW = Math.max(2, Math.min(20, bw * 0.7));
+    const y = v => H - padB - (H - padT - padB) * (v / max);
+    const grid = [max, max / 2].map(v =>
+      `<line class="gline" x1="0" x2="${W}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" />
+       <text class="glabel" x="1" y="${(y(v) - 2).toFixed(1)}">${fmtUnit(v, unit)}</text>`).join('');
+    const bars = points.map((p, i) => {
+      const h = Math.max((H - padT - padB) * (p.v / max), 1.5);
+      return `<rect class="gbar" data-i="${i}" x="${(bw * i + (bw - barW) / 2).toFixed(1)}" y="${(H - padB - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="2" />`;
+    }).join('');
+    return `<svg class="growth-chart" viewBox="0 0 ${W} ${H}" role="img">
+      ${grid}
+      <line class="gaxis" x1="0" x2="${W}" y1="${H - padB}" y2="${H - padB}" />
+      ${bars}
+      <text class="glabel" x="0" y="${H - 3}">${mdShort(points[0].date)}</text>
+      ${points.length > 1 ? `<text class="glabel" x="${W}" y="${H - 3}" text-anchor="end">${mdShort(points[points.length - 1].date)}</text>` : ''}
+    </svg>`;
+  }
+
+  function statsHtml(points, unit){
+    const n = points.length;
+    const best = points.reduce((a, b) => b.v > a.v ? b : a);
+    const avg = points.reduce((a, b) => a + b.v, 0) / n;
+    const last = points[n - 1], prev = points[n - 2];
+    const diff = prev && prev.v ? Math.round(((last.v - prev.v) / prev.v) * 100) : null;
+    return `<div class="growth-stats">
+      <div><span>直近</span><b>${fmtUnit(last.v, unit)}</b>${diff === null ? '' : `<em class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : ''}${diff}%</em>`}</div>
+      <div><span>最高</span><b>${fmtUnit(best.v, unit)}</b><em>${mdShort(best.date)}</em></div>
+      <div><span>平均</span><b>${fmtUnit(avg, unit)}</b></div>
+      <div><span>記録</span><b>${n}</b><em>日</em></div>
+    </div>`;
   }
 
   // ---------- 今日のリマインダー ----------

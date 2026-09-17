@@ -82,7 +82,7 @@ body { overscroll-behavior-y:none; }
 #app .add-row button { background:#e05a2b; color:#fff; border:none; border-radius:8px; padding:9px 14px; font-size:13px; cursor:pointer; font-weight:600; }
 
 #app .status { text-align:center; font-size:12px; color:#888; margin-top:10px; min-height:16px; }
-#app .history-toggle, #app .edit-toggle, #app .rotation-toggle, #app .notify-toggle, #app .backup-toggle { text-align:center; font-size:12.5px; color:#888; margin-top:16px; cursor:pointer; text-decoration:underline; }
+#app .history-toggle, #app .edit-toggle, #app .rotation-toggle, #app .notify-toggle, #app .backup-toggle, #app .growth-toggle { text-align:center; font-size:12.5px; color:#888; margin-top:16px; cursor:pointer; text-decoration:underline; }
 #app .history-list { margin-top:10px; font-size:13px; }
 #app .history-day { border-top:1px solid #eee; padding:8px 0; }
 #app .history-day .hd-date { font-weight:600; margin-bottom:2px; }
@@ -158,6 +158,28 @@ body { overscroll-behavior-y:none; }
 #app .history-day .hd-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:2px; }
 #app .history-day .hd-vol { font-weight:600; font-size:12px; color:#c94a1f; margin-left:8px; }
 #app .hd-edit { background:#fff; border:1px solid #e05a2b; color:#e05a2b; border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer; flex:none; }
+
+/* 成長グラフ */
+#app .growth-controls { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+#app .growth-controls select { width:100%; padding:9px 10px; border:1px solid #ddd; border-radius:8px; font-size:16px; background:#fff; }
+#app .growth-periods { display:flex; gap:6px; }
+#app .growth-periods button { flex:1; background:#f0f0f0; border:none; border-radius:8px; padding:7px 4px; font-size:12.5px; cursor:pointer; }
+#app .growth-periods button.active { background:#e05a2b; color:#fff; font-weight:700; }
+#app .growth-unit { font-size:11.5px; color:#888; margin-bottom:2px; }
+#app .growth-chart { width:100%; height:auto; display:block; overflow:visible; }
+#app .growth-chart .gbar { fill:#e05a2b; cursor:pointer; }
+#app .growth-chart .gbar.sel { fill:#8a3413; }
+#app .growth-chart .gline { stroke:#eee; stroke-width:1; }
+#app .growth-chart .gaxis { stroke:#ddd; stroke-width:1; }
+#app .growth-chart .glabel { font-size:8px; fill:#aaa; }
+#app .growth-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 10px; margin-top:12px; }
+#app .growth-stats div { background:#f7f7f7; border-radius:8px; padding:7px 10px; font-size:12px; color:#888; }
+#app .growth-stats b { display:inline-block; font-size:14px; color:#1a1a1a; margin:0 4px 0 6px; }
+#app .growth-stats em { font-style:normal; font-size:11.5px; color:#999; }
+#app .growth-stats em.up { color:#2e9e44; font-weight:700; }
+#app .growth-stats em.down { color:#c33; font-weight:700; }
+#app .growth-detail { font-size:12.5px; color:#555; text-align:center; margin-top:10px; min-height:18px; }
+#app .growth-empty { font-size:13px; color:#999; text-align:center; padding:20px 0; }
 
 #app .app-version { text-align:center; font-size:11px; color:#bbb; margin-top:24px; }
 
