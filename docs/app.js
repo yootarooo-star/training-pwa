@@ -78,6 +78,8 @@
   let scheduleRefDate = new Date();
   let lastToday = todayStr();
   let viewingDate = null;  // いま画面に出している日付
+  let renderedGroups = [];
+  let collapsedGroups = TMStore.get('ui-collapsed') || {}; // 折りたたんでいる種類（次に開いたときも同じ状態にする）
   let dirty = false;       // 保存していない変更があるか
   const dayCache = {};
 
@@ -265,17 +267,55 @@
     renderItems();
   }
 
+  // 種類（トレーニング 胸・肩 など）ごとのまとまりに分ける
+  function groupsOf(items){
+    const groups = [];
+    items.forEach(item => {
+      if (!item.sets) item.sets = [{ weight:'', reps:'' }]; // 古い記録への保険
+      const label = item.groupLabel || '';
+      let g = groups[groups.length - 1];
+      if (!g || g.label !== label) { g = { label, items: [] }; groups.push(g); }
+      g.items.push(item);
+    });
+    return groups;
+  }
+
   function renderItems(){
-    let lastGroup = null;
     itemsContainer.innerHTML = '';
-    currentItems.forEach(item => {
-      if (!item.sets) item.sets = [{ weight:'', reps:'' }]; // safety for older records
-      if (item.groupLabel && item.groupLabel !== lastGroup) {
-        const h = document.createElement('div'); h.className = 'group-header'; h.textContent = item.groupLabel;
-        itemsContainer.appendChild(h); lastGroup = item.groupLabel;
-      }
-      const div = document.createElement('div');
-      div.className = 'item' + (item.checked ? ' done' : '');
+    renderedGroups = groupsOf(currentItems);
+    renderedGroups.forEach((g, gi) => {
+      const collapsed = !!collapsedGroups[g.label];
+      const wrap = document.createElement('div');
+      wrap.className = 'group';
+      wrap.innerHTML = `
+        <button class="group-header" data-group="${gi}" aria-expanded="${!collapsed}">
+          <span class="gh-caret">${collapsed ? '▶' : '▼'}</span>
+          <span class="gh-label">${escapeHtml(g.label)}</span>
+          <span class="gh-sum" data-gsum="${gi}"></span>
+        </button>
+        <div class="group-body"${collapsed ? ' hidden' : ''}>${g.items.map(itemHtml).join('')}</div>`;
+      itemsContainer.appendChild(wrap);
+    });
+    updateTotals();
+  }
+
+  function toggleGroup(gi){
+    const g = renderedGroups[gi];
+    if (!g) return;
+    collapsedGroups[g.label] = !collapsedGroups[g.label];
+    TMStore.set('ui-collapsed', collapsedGroups);
+    renderItems();
+  }
+
+  $('toggleAllBtn').addEventListener('click', () => {
+    const labels = [...new Set(currentItems.map(i => i.groupLabel || ''))];
+    const closing = labels.some(l => !collapsedGroups[l]); // 1つでも開いていれば、すべて閉じる
+    labels.forEach(l => { collapsedGroups[l] = closing; });
+    TMStore.set('ui-collapsed', collapsedGroups);
+    renderItems();
+  });
+
+  function itemHtml(item){
       const setsHtml = item.sets.map((s, si) => `
         <div class="set-row">
           <span class="set-label">セット${si+1}</span>
@@ -285,7 +325,8 @@
           ${item.repsOnly ? '<span class="set-x">回</span>' : ''}
           ${item.sets.length > 1 ? `<button class="set-del" data-id="${item.id}" data-setidx="${si}" data-role="setdel">✕</button>` : ''}
         </div>`).join('');
-      div.innerHTML = `
+      return `
+      <div class="item${item.checked ? ' done' : ''}">
         <div class="item-top">
           <input type="checkbox" class="checkbox" ${item.checked ? 'checked' : ''} data-id="${item.id}" data-role="check" />
           <input type="text" class="item-name" value="${escapeHtml(item.name)}" data-id="${item.id}" data-role="name" />
@@ -298,10 +339,8 @@
             <button class="mode-btn" data-id="${item.id}" data-role="mode">${item.repsOnly ? 'kgも入力する' : '回数だけにする'}</button>
             <span class="item-vol" data-vol="${item.id}"></span>
           </div>
-        </div>`;
-      itemsContainer.appendChild(div);
-    });
-    updateTotals();
+        </div>
+      </div>`;
   }
 
   function updateTotals(){
@@ -309,6 +348,16 @@
       const el = itemsContainer.querySelector(`[data-vol="${item.id}"]`);
       if (el) { const v = itemVolume(item); el.textContent = v ? `計 ${fmtKg(v)}` : ''; }
     });
+    // 折りたたんでいても進み具合が分かるよう、見出しに「2/5・480kg」を出す
+    renderedGroups.forEach((g, gi) => {
+      const el = itemsContainer.querySelector(`[data-gsum="${gi}"]`);
+      if (!el) return;
+      const done = g.items.filter(i => i.checked).length;
+      const vol = dayVolume(g.items);
+      el.textContent = `${done}/${g.items.length}` + (vol ? `・${fmtKg(vol)}` : '');
+      el.closest('.group-header').classList.toggle('done', done === g.items.length && g.items.length > 0);
+    });
+    $('toggleAllBtn').textContent = renderedGroups.some(g => !collapsedGroups[g.label]) ? 'すべて閉じる' : 'すべて開く';
     const doneCount = currentItems.filter(i => i.checked).length;
     dayTotal.innerHTML = `完了 <b>${doneCount}</b> / ${currentItems.length} 種目<span class="sep">｜</span>総重量 <b>${fmtKg(dayVolume(currentItems))}</b>`;
   }
@@ -335,6 +384,8 @@
     dirty = true; updateTotals();
   });
   itemsContainer.addEventListener('click', e => {
+    const header = e.target.closest('[data-group]');
+    if (header) { toggleGroup(Number(header.dataset.group)); return; }
     const el = e.target.closest('button[data-role]');
     const item = el && findItem(el);
     if (!item) return;

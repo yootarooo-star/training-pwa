@@ -51,7 +51,14 @@ body { overscroll-behavior-y:none; }
 #app .combo-summary { font-size:13px; color:#666; background:#f7f7f7; border-radius:8px; padding:8px 10px; margin:10px 0; }
 #app .rest-banner { font-size:13px; color:#a15c00; background:#fff6e0; border-radius:8px; padding:8px 10px; margin:10px 0; }
 
-#app .group-header { font-size:13px; font-weight:700; color:#e05a2b; margin:16px 0 6px; padding-bottom:4px; border-bottom:2px solid #f0d8cc; }
+#app .group { margin-bottom:6px; }
+#app .group-header { display:flex; align-items:center; gap:8px; width:100%; margin:14px 0 8px; padding:11px 12px; background:#fff; border:1px solid #f0d8cc; border-left:4px solid #e05a2b; border-radius:10px; font-size:13px; font-weight:700; color:#e05a2b; text-align:left; cursor:pointer; }
+#app .group-header.done { background:#fff6f0; }
+#app .group-header .gh-caret { font-size:10px; flex:none; }
+#app .group-header .gh-label { flex:1; }
+#app .group-header .gh-sum { font-size:11.5px; font-weight:700; color:#999; flex:none; }
+#app .group-tools { display:flex; justify-content:flex-end; margin-bottom:2px; }
+#app .group-tools button { background:none; border:1px solid #ddd; color:#888; border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer; }
 #app .item { border:1px solid #e5e5e5; border-radius:12px; padding:10px 12px; margin-bottom:8px; background:#fff; }
 #app .item.done { background:#fff6f0; border-color:#f0c4a6; }
 #app .item-top { display:flex; align-items:center; gap:10px; }
