@@ -98,6 +98,7 @@
   </div>
 
   <div id="checklistWrap" style="display:none;">
+    <div class="carry-note" id="carryNote" hidden>前回の重さ・回数を引き継いでいます</div>
     <div class="group-tools"><button id="toggleAllBtn">すべて閉じる</button></div>
     <div id="itemsContainer"></div>
     <div class="day-total" id="dayTotal"></div>
@@ -124,6 +125,20 @@
   <div id="backupArea" hidden></div>
 
   <div class="app-version" id="appVersion"></div>
+
+  <div class="timer" id="timerBar" hidden>
+    <div class="timer-presets" id="timerPresets" hidden>
+      <button data-sec="45">45秒</button>
+      <button data-sec="60">60秒</button>
+      <button data-sec="90">90秒</button>
+      <button data-sec="120">2分</button>
+      <button data-sec="180">3分</button>
+    </div>
+    <div class="timer-row">
+      <button class="timer-main" id="timerMain">⏱ 90秒</button>
+      <button class="timer-opt" id="timerOpt" aria-label="秒数を変える">▾</button>
+    </div>
+  </div>
 
   <div class="drawer-overlay" id="drawerOverlay"></div>
   <nav class="drawer" id="drawer" aria-label="メニュー" aria-hidden="true">

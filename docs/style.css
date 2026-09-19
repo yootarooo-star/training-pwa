@@ -13,6 +13,21 @@ body { overscroll-behavior-y:none; }
 #app .bell-btn { background:#fff; border:1px solid #e5e5e5; border-radius:999px; width:40px; height:40px; font-size:18px; cursor:pointer; flex:none; }
 #app .menu-btn { background:#e05a2b; border-color:#e05a2b; color:#fff; font-size:17px; }
 
+/* 前回の値の引き継ぎ */
+#app .carry-note { font-size:12px; color:#8a6a52; background:#fff6e0; border-radius:8px; padding:8px 10px; margin-bottom:8px; text-align:center; }
+
+/* インターバルタイマー（記録中だけ右下に出る） */
+#app .timer { position:fixed; right:14px; bottom:calc(env(safe-area-inset-bottom) + 14px); z-index:18; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+#app .timer-row { display:flex; box-shadow:0 4px 14px rgba(0,0,0,.2); border-radius:999px; overflow:hidden; }
+#app .timer-main { background:#333; color:#fff; border:none; padding:13px 18px; font-size:15px; font-weight:700; cursor:pointer; font-variant-numeric:tabular-nums; min-width:96px; }
+#app .timer-opt { background:#333; color:#fff; border:none; border-left:1px solid rgba(255,255,255,.2); padding:13px 12px; font-size:13px; cursor:pointer; }
+#app .timer.running .timer-main, #app .timer.running .timer-opt { background:#e05a2b; }
+#app .timer.done .timer-main, #app .timer.done .timer-opt { background:#2e9e44; animation:tm-flash .5s ease-in-out 4; }
+@keyframes tm-flash { 50% { background:#7ed492; } }
+#app .timer-presets { display:flex; flex-direction:column; gap:4px; background:#fff; border:1px solid #e5e5e5; border-radius:12px; padding:6px; box-shadow:0 4px 14px rgba(0,0,0,.15); }
+#app .timer-presets button { background:none; border:none; padding:9px 16px; font-size:13.5px; font-weight:600; color:#333; cursor:pointer; border-radius:8px; }
+#app .timer-presets button:active { background:#fff3ee; }
+
 /* ハンバーガーメニュー（右から出る） */
 #app .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,.35); opacity:0; pointer-events:none; transition:opacity .2s ease; z-index:20; }
 #app .drawer-overlay.open { opacity:1; pointer-events:auto; }
@@ -184,8 +199,8 @@ body { overscroll-behavior-y:none; }
 #app .growth-periods button.active { background:#e05a2b; color:#fff; font-weight:700; }
 #app .growth-unit { font-size:11.5px; color:#888; margin-bottom:2px; }
 #app .growth-chart { width:100%; height:auto; display:block; overflow:visible; }
-#app .growth-chart .gbar { fill:#e05a2b; cursor:pointer; }
-#app .growth-chart .gbar.sel { fill:#8a3413; }
+#app .growth-chart .gbar { fill:var(--bar,#e05a2b); cursor:pointer; }
+#app .growth-chart .gbar.sel { fill:#333; }
 #app .growth-chart .gline { stroke:#eee; stroke-width:1; }
 #app .growth-chart .gaxis { stroke:#ddd; stroke-width:1; }
 #app .growth-chart .glabel { font-size:8px; fill:#aaa; }

@@ -1,6 +1,6 @@
 // トレーニングメニュー本体（training-menu-v6.html のロジックを引き継ぎ、保存先を localStorage に変更）
 (function(){
-  const APP_VERSION = 4; // 更新して公開するたびに上げる（service-worker.js の CACHE と数字を合わせる）
+  const APP_VERSION = 5; // 更新して公開するたびに上げる（service-worker.js の CACHE と数字を合わせる）
   const pad2 = n => String(n).padStart(2,'0');
   const toDateStr = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
   const todayStr = () => toDateStr(new Date());
@@ -122,6 +122,8 @@
   const calLegend = $('calLegend');
   const growthToggle = $('growthToggle');
   const growthArea = $('growthArea');
+  const timerBar = $('timerBar');
+  const timerMain = $('timerMain');
 
   dateInput.value = todayStr();
 
@@ -238,35 +240,62 @@
     if (t) { t.repsOnly = !!item.repsOnly; saveCategories(); }
   }
 
-  function buildItemsFromSelections(){
+  // 種目ごとに「いちばん新しい記録のセット内容」を集める（次のメニューに引き継ぐため）
+  async function lastSetsByName(){
+    const map = new Map();
+    for (const d of recordedDates().sort().reverse()) {
+      const rec = await loadDay(d);
+      ((rec && rec.items) || []).forEach(i => {
+        if (map.has(i.name) || !i.sets || !i.sets.length) return;
+        if (!i.sets.some(s => s.weight || s.reps)) return; // 空の記録は引き継がない
+        map.set(i.name, i.sets.map(s => ({ weight: s.weight || '', reps: s.reps || '' })));
+      });
+    }
+    return map;
+  }
+
+  async function buildItemsFromSelections(){
+    const last = await lastSetsByName();
     const items = [];
+    let carried = false;
     categories.forEach(cat => {
       const variant = cat.variants.find(v => v.id === selections[cat.id]);
       if (!variant) return;
       variant.items.forEach(it => {
-        items.push({ id: uid(), templateId: it.id, name: it.name, checked:false, categoryId: cat.id, repsOnly: !!it.repsOnly, sets: defaultSetsFor(cat.id, it), groupLabel:`${cat.label} ${variant.label}` });
+        const prev = last.get(it.name);
+        if (prev) carried = true;
+        items.push({ id: uid(), templateId: it.id, name: it.name, checked:false, categoryId: cat.id, repsOnly: !!it.repsOnly,
+          sets: prev ? clone(prev) : defaultSetsFor(cat.id, it), groupLabel:`${cat.label} ${variant.label}` });
       });
     });
+    $('carryNote').hidden = !carried;
     return items;
   }
 
   $('buildBtn').addEventListener('click', async () => {
     if (Object.keys(selections).filter(k => selections[k]).length < categories.length) { alert('すべてのカテゴリーを選択してください'); return; }
-    currentItems = buildItemsFromSelections();
+    currentItems = await buildItemsFromSelections();
     dayHasRecord = false;
     dirty = true;
     showChecklist();
   });
 
-  $('changeComboBtn').addEventListener('click', () => {
-    comboSection.style.display = 'block'; rebuildNoteWrap.style.display = 'none'; checklistWrap.style.display = 'none';
-  });
+  $('changeComboBtn').addEventListener('click', hideChecklist);
 
   function showChecklist(){
     comboSection.style.display = 'none';
     rebuildNoteWrap.style.display = dayHasRecord ? 'block' : 'none';
     checklistWrap.style.display = 'block';
+    syncTimerVisibility();
     renderItems();
+  }
+
+  function hideChecklist(){
+    comboSection.style.display = 'block';
+    rebuildNoteWrap.style.display = 'none';
+    checklistWrap.style.display = 'none';
+    syncTimerVisibility();
+    $('carryNote').hidden = true;
   }
 
   // 種類（トレーニング 胸・肩 など）ごとのまとまりに分ける
@@ -446,7 +475,7 @@
         categories.forEach(cat => { selections[cat.id] = cat.variants[0]?.id; });
       }
       renderCategoryPicker(); updateComboSummary();
-      comboSection.style.display = 'block'; rebuildNoteWrap.style.display = 'none'; checklistWrap.style.display = 'none';
+      hideChecklist();
     }
     updateEditingUI();
   }
@@ -849,6 +878,113 @@
     }));
   }
 
+  // ---------- インターバルタイマー ----------
+  // 終了時刻を保存しておき、そこから残り時間を出す（アプリに戻ったときもズレない）。
+  // ただし iPhone はアプリを閉じている間 JavaScript が止まるため、閉じている間は音が鳴らない。
+  let timerSec = TMStore.get('timer-sec') || 90;
+  let timerEndsAt = TMStore.get('timer-endsAt') || 0;
+  let timerTick = null;
+  let audioCtx = null;
+  let wakeLock = null;
+
+  const secLabel = s => s >= 60 && s % 60 === 0 ? `${s / 60}分` : `${s}秒`;
+  const timeLabel = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${pad2(s % 60)}`; };
+
+  // 記録中はいつでも使えるように出す。カウント中は別の画面に移っても出したままにする
+  function syncTimerVisibility(){
+    timerBar.hidden = checklistWrap.style.display === 'none' && !timerEndsAt && !timerBar.classList.contains('done');
+  }
+
+  function startTimer(sec){
+    if (sec) { timerSec = sec; TMStore.set('timer-sec', timerSec); }
+    timerEndsAt = Date.now() + timerSec * 1000;
+    TMStore.set('timer-endsAt', timerEndsAt);
+    unlockAudio();      // 音を鳴らせるようにする（iPhoneはボタンを押した流れでしか許可されない）
+    requestWakeLock();  // 休憩中に画面が消えないようにする
+    timerBar.classList.add('running');
+    timerBar.classList.remove('done');
+    syncTimerVisibility();
+    updateTimer();
+    if (!timerTick) timerTick = setInterval(updateTimer, 250);
+  }
+
+  function stopTimer(){
+    timerEndsAt = 0;
+    TMStore.set('timer-endsAt', 0);
+    clearInterval(timerTick); timerTick = null;
+    timerBar.classList.remove('running', 'done');
+    releaseWakeLock();
+    timerMain.textContent = `⏱ ${secLabel(timerSec)}`;
+    syncTimerVisibility();
+  }
+
+  function updateTimer(){
+    if (!timerEndsAt) return;
+    const left = timerEndsAt - Date.now();
+    if (left <= 0) { finishTimer(); return; }
+    timerMain.textContent = timeLabel(left);
+  }
+
+  function finishTimer(){
+    timerEndsAt = 0;
+    TMStore.set('timer-endsAt', 0);
+    clearInterval(timerTick); timerTick = null;
+    timerBar.classList.remove('running');
+    timerBar.classList.add('done');
+    timerMain.textContent = '✓ 終了';
+    syncTimerVisibility();
+    beep();
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
+    releaseWakeLock();
+    setTimeout(() => { if (!timerEndsAt) stopTimer(); }, 6000);
+  }
+
+  function unlockAudio(){
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch(e) { audioCtx = null; }
+  }
+
+  function beep(){
+    if (!audioCtx) return;
+    try {
+      [0, 0.28, 0.56].forEach(t => {
+        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        const at = audioCtx.currentTime + t;
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(0.4, at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.22);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(at); osc.stop(at + 0.25);
+      });
+    } catch(e) { console.warn(e); }
+  }
+
+  async function requestWakeLock(){
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+  }
+  function releaseWakeLock(){
+    try { if (wakeLock) wakeLock.release(); } catch(e) {}
+    wakeLock = null;
+  }
+
+  timerMain.addEventListener('click', () => { if (timerEndsAt) stopTimer(); else startTimer(); });
+  $('timerOpt').addEventListener('click', () => { $('timerPresets').hidden = !$('timerPresets').hidden; });
+  $('timerPresets').querySelectorAll('[data-sec]').forEach(btn => btn.addEventListener('click', () => {
+    $('timerPresets').hidden = true;
+    startTimer(Number(btn.dataset.sec));
+  }));
+
+  function initTimer(){
+    timerMain.textContent = `⏱ ${secLabel(timerSec)}`;
+    if (timerEndsAt > Date.now()) { timerBar.classList.add('running'); timerTick = setInterval(updateTimer, 250); updateTimer(); }
+    else if (timerEndsAt) stopTimer();
+    syncTimerVisibility();
+  }
+
   // ---------- 成長グラフ（日ごとの総重量） ----------
   let growthTarget = '__all__';
   let growthDays = 90;
@@ -864,11 +1000,24 @@
   // 記録済みの全日から、日ごと・種目ごとの総重量と合計回数を集める
   async function collectGrowthData(){
     const byName = new Map();
+    const byVariant = new Map();
     const all = [];
+    const mainCat = colorCategory();
     for (const d of recordedDates().sort()) {
       const rec = await loadDay(d);
       const items = ((rec && rec.items) || []).filter(i => i.checked);
       if (!items.length) continue;
+      // その日のトレーニングの種類（胸・肩 など）ごとの合計
+      const vId = mainCat && rec.selections ? rec.selections[mainCat.id] : null;
+      const mainItems = mainCat ? items.filter(i => i.categoryId === mainCat.id) : [];
+      if (vId && mainItems.length) {
+        if (!byVariant.has(vId)) byVariant.set(vId, []);
+        byVariant.get(vId).push({
+          date: d,
+          vol: mainItems.reduce((a, i) => a + itemVolume(i), 0),
+          reps: mainItems.reduce((a, i) => a + (i.sets || []).reduce((x, s) => x + num(s.reps), 0), 0)
+        });
+      }
       let dayVol = 0, dayReps = 0;
       items.forEach(i => {
         const vol = itemVolume(i);
@@ -882,17 +1031,32 @@
       });
       all.push({ date: d, vol: dayVol, reps: dayReps });
     }
-    return { byName, all };
+    return { byName, byVariant, all };
   }
 
   async function renderGrowth(){
     growthArea.innerHTML = '<div class="loading">読み込み中...</div>';
     const data = await collectGrowthData();
     if (!data.all.length) { growthArea.innerHTML = '<h3>📈 成長グラフ</h3><div class="growth-empty">まだ記録がありません</div>'; return; }
-    if (growthTarget !== '__all__' && !data.byName.has(growthTarget)) growthTarget = '__all__';
-
+    const mainCat = colorCategory();
     const names = [...data.byName.keys()].sort((a, b) => data.byName.get(b).length - data.byName.get(a).length);
-    const raw = growthTarget === '__all__' ? data.all : data.byName.get(growthTarget);
+    const variants = (mainCat ? mainCat.variants : []).filter(v => data.byVariant.has(v.id));
+    // 選んでいた対象が無くなっていたら全体に戻す
+    const valid = growthTarget === '__all__'
+      || (growthTarget.startsWith('v:') && data.byVariant.has(growthTarget.slice(2)))
+      || (growthTarget.startsWith('n:') && data.byName.has(growthTarget.slice(2)));
+    if (!valid) growthTarget = '__all__';
+
+    let raw = data.all;
+    let barColor = '#e05a2b';
+    if (growthTarget.startsWith('v:')) {
+      const vid = growthTarget.slice(2);
+      raw = data.byVariant.get(vid);
+      const v = mainCat.variants.find(v => v.id === vid);
+      if (v) barColor = variantColor(mainCat, v);
+    } else if (growthTarget.startsWith('n:')) {
+      raw = data.byName.get(growthTarget.slice(2));
+    }
     const from = growthDays ? toDateStr(new Date(Date.now() - growthDays * 86400000)) : '';
     const inRange = raw.filter(p => p.date >= from);
     const useReps = !inRange.some(p => p.vol > 0); // 重さを使わない種目は回数で見る
@@ -904,14 +1068,17 @@
       <div class="growth-controls">
         <select id="growthSelect">
           <option value="__all__"${growthTarget === '__all__' ? ' selected' : ''}>全体（1日の総重量）</option>
-          ${names.map(n => `<option value="${escapeHtml(n)}"${n === growthTarget ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+          ${variants.length ? `<optgroup label="${escapeHtml(mainCat.label)}の種類">${variants.map(v =>
+            `<option value="v:${v.id}"${growthTarget === 'v:' + v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</optgroup>` : ''}
+          ${names.length ? `<optgroup label="種目ごと">${names.map(n =>
+            `<option value="n:${escapeHtml(n)}"${growthTarget === 'n:' + n ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}</optgroup>` : ''}
         </select>
         <div class="growth-periods">
           ${[[30,'30日'],[90,'3か月'],[365,'1年'],[0,'全期間']].map(([d, l]) => `<button data-days="${d}" class="${growthDays === d ? 'active' : ''}">${l}</button>`).join('')}
         </div>
       </div>
       ${points.length
-        ? `<div class="growth-unit">${useReps ? '合計回数' : '総重量'}（${unit}）</div>` + chartSvg(points, unit) + statsHtml(points, unit)
+        ? `<div class="growth-unit">${useReps ? '合計回数' : '総重量'}（${unit}）</div>` + chartSvg(points, unit, barColor) + statsHtml(points, unit)
         : '<div class="growth-empty">この期間の記録はありません</div>'}
       <div class="growth-detail" id="growthDetail">${points.length ? '棒を押すと、その日の数値が出ます' : ''}</div>`;
 
@@ -925,7 +1092,7 @@
     }));
   }
 
-  function chartSvg(points, unit){
+  function chartSvg(points, unit, barColor){
     const W = 320, H = 150, padT = 12, padB = 16;
     const max = Math.max(...points.map(p => p.v)) || 1;
     const bw = W / points.length;
@@ -938,7 +1105,7 @@
       const h = Math.max((H - padT - padB) * (p.v / max), 1.5);
       return `<rect class="gbar" data-i="${i}" x="${(bw * i + (bw - barW) / 2).toFixed(1)}" y="${(H - padB - h).toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="2" />`;
     }).join('');
-    return `<svg class="growth-chart" viewBox="0 0 ${W} ${H}" role="img">
+    return `<svg class="growth-chart" viewBox="0 0 ${W} ${H}" role="img" style="--bar:${barColor || '#e05a2b'}">
       ${grid}
       <line class="gaxis" x1="0" x2="${W}" y1="${H - padB}" y2="${H - padB}" />
       ${bars}
@@ -998,6 +1165,7 @@
   }
 
   async function tick(){
+    updateTimer(); // 画面に戻ったときに残り時間を合わせる
     await checkDayChange();
     TMNotify.tick(await updateReminder());
   }
@@ -1117,6 +1285,7 @@
     await renderSchedule();
     await renderStreak();
 
+    initTimer();
     TMNotify.init({ getRestDays: restDays, getTodayStatus: todayStatus, onChange: updateReminder });
     TMNotify.mount(notifyArea);
     await updateReminder();
