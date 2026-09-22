@@ -1,6 +1,6 @@
 // トレーニングメニュー本体（training-menu-v6.html のロジックを引き継ぎ、保存先を localStorage に変更）
 (function(){
-  const APP_VERSION = 5; // 更新して公開するたびに上げる（service-worker.js の CACHE と数字を合わせる）
+  const APP_VERSION = 6; // 更新して公開するたびに上げる（service-worker.js の CACHE と数字を合わせる）
   const pad2 = n => String(n).padStart(2,'0');
   const toDateStr = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
   const todayStr = () => toDateStr(new Date());
@@ -148,6 +148,9 @@
   function recordedDates(){ return TMStore.keys('day:').map(k => k.slice('day:'.length)); }
 
   // ---------- combo helpers ----------
+  const NONE = '__none__'; // そのカテゴリーは「やらない」
+  const hasAnySelection = sel => categories.some(c => sel[c.id] && sel[c.id] !== NONE);
+  const isRestRec = rec => !!(rec && rec.rest); // その日を休養日にした記録
   function comboLabel(sel){
     return categories.map(cat => { const v = cat.variants.find(v => v.id === sel[cat.id]); return v ? `${cat.label}${v.label}` : null; }).filter(Boolean).join(' / ');
   }
@@ -188,7 +191,7 @@
     categoryPicker.innerHTML = categories.map(cat => `
       <div class="cat-block">
         <div class="cat-label">${escapeHtml(cat.label)}</div>
-        <div class="variant-row">${cat.variants.map(v => `<button class="variant-btn ${selections[cat.id] === v.id ? 'selected' : ''}" data-cat="${cat.id}" data-variant="${v.id}">${escapeHtml(v.label)}</button>`).join('')}</div>
+        <div class="variant-row">${cat.variants.map(v => `<button class="variant-btn ${selections[cat.id] === v.id ? 'selected' : ''}" data-cat="${cat.id}" data-variant="${v.id}">${escapeHtml(v.label)}</button>`).join('')}<button class="variant-btn none ${selections[cat.id] === NONE ? 'selected' : ''}" data-cat="${cat.id}" data-variant="${NONE}">なし</button></div>
       </div>`).join('');
     categoryPicker.querySelectorAll('.variant-btn').forEach(btn => btn.addEventListener('click', () => {
       selections[btn.dataset.cat] = btn.dataset.variant; renderCategoryPicker(); updateComboSummary();
@@ -197,6 +200,7 @@
   function updateComboSummary(){ comboSummary.textContent = '選んだ組み合わせ: ' + (comboLabel(selections) || '未選択'); }
   function ensureSelectionsDefaults(){
     categories.forEach(cat => {
+      if (selections[cat.id] === NONE) return;
       if (!selections[cat.id] || !cat.variants.find(v => v.id === selections[cat.id])) {
         selections[cat.id] = cat.variants[0]?.id;
       }
@@ -218,7 +222,7 @@
   }
 
   $('savePresetBtn').addEventListener('click', async () => {
-    if (Object.keys(selections).filter(k=>selections[k]).length < categories.length) { alert('すべてのカテゴリーを選択してから保存してください'); return; }
+    if (!hasAnySelection(selections)) { alert('少なくとも1つは選んでから保存してください'); return; }
     const name = prompt('この組み合わせの名前を入力してください（例：月曜メニュー）', comboLabel(selections));
     if (!name) return;
     presets.push({ id: uid(), name: name.trim(), selections: Object.assign({}, selections) });
@@ -273,7 +277,7 @@
   }
 
   $('buildBtn').addEventListener('click', async () => {
-    if (Object.keys(selections).filter(k => selections[k]).length < categories.length) { alert('すべてのカテゴリーを選択してください'); return; }
+    if (!hasAnySelection(selections)) { alert('少なくとも1つは選んでください（休む日は「休養日にする」を押してください）'); return; }
     currentItems = await buildItemsFromSelections();
     dayHasRecord = false;
     dirty = true;
@@ -440,14 +444,34 @@
       dirty = false;
       updateEditingUI();
       rebuildNoteWrap.style.display = 'block';
-      if (historyList.style.display !== 'none') renderHistory();
-      if (!growthArea.hidden) renderGrowth();
-      renderSchedule();
-      renderStreak();
-      if (dateStr === todayStr()) TMNotify.syncStatus(dateStr, dayIsDone(record));
-      updateReminder();
+      afterDayChanged(dateStr, dayIsDone(record));
       setTimeout(() => { statusMsg.textContent=''; }, 2500);
     }
+  });
+
+  // ある日の記録が変わったあと、関係する表示をまとめて更新する
+  function afterDayChanged(dateStr, settled){
+    if (historyList.style.display !== 'none') renderHistory();
+    if (!growthArea.hidden) renderGrowth();
+    renderSchedule();
+    renderStreak();
+    if (dateStr === todayStr()) TMNotify.syncStatus(dateStr, settled);
+    updateReminder();
+  }
+
+  // ---------- 休養日 ----------
+  $('restDayBtn').addEventListener('click', async () => {
+    const dateStr = viewingDate || todayStr();
+    if (!(await saveDay(dateStr, { rest:true, selections:{}, items:[] }))) { alert('保存に失敗しました'); return; }
+    await initForDate(dateStr);
+    afterDayChanged(dateStr, true);
+  });
+  $('cancelRestBtn').addEventListener('click', async () => {
+    const dateStr = viewingDate;
+    TMStore.remove('day:' + dateStr);
+    dayCache[dateStr] = null;
+    await initForDate(dateStr);
+    afterDayChanged(dateStr, false);
   });
 
   function rotationForDate(d){ return rotation[String(d.getDay())] || null; }
@@ -457,7 +481,18 @@
     dirty = false;
     const d = parseDateStr(dateStr);
     const rec = await loadDay(dateStr);
-    if (rec) {
+    $('restDayWrap').hidden = true;
+    if (isRestRec(rec)) {
+      // 休養日にした日：メニューは出さず「休養日」の表示だけ
+      dayHasRecord = true;
+      currentItems = [];
+      restBanner.style.display = 'none';
+      comboSection.style.display = 'none';
+      rebuildNoteWrap.style.display = 'none';
+      checklistWrap.style.display = 'none';
+      $('restDayWrap').hidden = false;
+      syncTimerVisibility();
+    } else if (rec) {
       selections = Object.assign({}, rec.selections || {});
       currentItems = clone(rec.items || []).map(it => it.sets ? it : Object.assign({}, it, { sets:[{ weight: it.weight||'', reps: it.reps||'' }] }));
       dayHasRecord = true;
@@ -506,6 +541,8 @@
     comboTitle.textContent = `${dayName}の組み合わせを選ぶ`;
     buildBtn.textContent = `この内容で${dayName}のメニューを作成`;
     saveDayBtn.textContent = `${dayName}の記録を保存`;
+    $('restDayBtn').textContent = `😴 ${dayName}を休養日にする`;
+    $('restDayText').textContent = `${dayName}は休養日です`;
   }
 
   dateInput.addEventListener('change', () => { if (dateInput.value) goToDate(dateInput.value); else dateInput.value = viewingDate; });
@@ -527,6 +564,10 @@
       for (const d of dates) {
         const rec = await loadDay(d);
         if (!rec) continue;
+        if (isRestRec(rec)) {
+          html += `<div class="history-day"><div class="hd-head"><div class="hd-date">${mdLabel(d)}</div><button class="hd-edit" data-edit="${d}">修正する</button></div><div class="hd-item">😴 休養日</div></div>`;
+          continue;
+        }
         const doneItems = (rec.items || []).filter(i => i.checked);
         const vol = dayVolume(rec.items);
         html += `<div class="history-day">
@@ -544,7 +585,7 @@
       }
       historyList.innerHTML = html || '<div style="color:#999;">まだ記録がありません</div>';
       historyList.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', async () => {
-        if (await goToDate(btn.dataset.edit)) checklistWrap.scrollIntoView({ behavior:'smooth', block:'start' });
+        if (await goToDate(btn.dataset.edit)) sectionForDay().scrollIntoView({ behavior:'smooth', block:'start' });
       }));
     } catch(e) { historyList.innerHTML = '<div style="color:#c33;">読み込みに失敗しました</div>'; }
   }
@@ -554,8 +595,11 @@
 
   async function computeStreakAndTotal(){
     const doneDates = new Set();
+    const restDates = new Set(); // 休養日にした日（継続日数を途切れさせない）
     for (const dateStr of recordedDates()) {
-      if (dayIsDone(await loadDay(dateStr))) doneDates.add(dateStr);
+      const rec = await loadDay(dateStr);
+      if (dayIsDone(rec)) doneDates.add(dateStr);
+      else if (isRestRec(rec)) restDates.add(dateStr);
     }
 
     let streak = 0;
@@ -567,7 +611,7 @@
       const cStr = toDateStr(cursor);
       if (doneDates.has(cStr)) { streak++; cursor.setDate(cursor.getDate() - 1); continue; }
       const rot = rotationForDate(cursor);
-      if (rot && rot.rest) { cursor.setDate(cursor.getDate() - 1); continue; }
+      if ((rot && rot.rest) || restDates.has(cStr)) { cursor.setDate(cursor.getDate() - 1); continue; }
       break;
     }
     return { streak, total: doneDates.size };
@@ -604,6 +648,7 @@
   async function cellInfo(d){
     const dateStr = toDateStr(d);
     const rec = await loadDay(dateStr);
+    if (isRestRec(rec)) return { dateStr, rest:true, dot:'dot-rest', planned:false };
     if (rec) {
       const total = (rec.items||[]).length;
       const done = (rec.items||[]).filter(i=>i.checked).length;
@@ -714,7 +759,7 @@
           ${categories.map(cat => `
             <div class="rot-cat-line">
               <div class="rot-cat-name">${escapeHtml(cat.label)}</div>
-              <div class="variant-row">${cat.variants.map(v => `<button class="variant-btn small ${rot[cat.id]===v.id ? 'selected':''}" data-dow="${jsDow}" data-cat="${cat.id}" data-variant="${v.id}">${escapeHtml(v.label)}</button>`).join('')}</div>
+              <div class="variant-row">${cat.variants.map(v => `<button class="variant-btn small ${rot[cat.id]===v.id ? 'selected':''}" data-dow="${jsDow}" data-cat="${cat.id}" data-variant="${v.id}">${escapeHtml(v.label)}</button>`).join('')}<button class="variant-btn small none ${rot[cat.id]===NONE ? 'selected':''}" data-dow="${jsDow}" data-cat="${cat.id}" data-variant="${NONE}">なし</button></div>
             </div>`).join('')}
         </div>
       </div>`;
@@ -741,7 +786,7 @@
   });
   function renderEditArea(){
     editArea.innerHTML = '<button class="btn-outline" id="resetToInitialBtn" style="margin-top:10px;">最新の初期データで種目リストを上書きする</button>'
-      + '<div class="rebuild-note">種目名の右のボタンで「kg×回」と「回数のみ」（自重の種目など）を切り替えられます。<br>トレーニングの各バリエーション名の左にある色見本を押すと、カレンダーの色を変えられます。</div>' + categories.map(cat => `
+      + '<div class="rebuild-note">種目名の右のボタンで「kg×回」と「回数のみ」（自重の種目など）を切り替えられます。↑↓で並べ替えできます。<br>トレーニングの各バリエーション名の左にある色見本を押すと、カレンダーの色を変えられます。</div>' + categories.map(cat => `
       <div class="section-title" style="margin-top:16px;display:flex;align-items:center;gap:8px;">
         <input type="text" class="category-name-input" data-cat="${cat.id}" value="${escapeHtml(cat.label)}" style="font-weight:700;border:1px solid #ddd;border-radius:6px;padding:5px 8px;width:170px;max-width:55%;" />
         <button class="del-btn" data-catdel="${cat.id}" style="font-size:12px;">✕ カテゴリー削除</button>
@@ -769,6 +814,8 @@
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
           <input type="text" value="${escapeHtml(it.name)}" data-editname="${it.id}" data-cat="${cat.id}" data-variant="${v.id}" style="flex:1;min-width:0;padding:6px 8px;border:1px solid #ddd;border-radius:6px;" />
           <button class="mode-chip ${it.repsOnly ? 'on' : ''}" data-editreps="${it.id}" data-cat="${cat.id}" data-variant="${v.id}">${it.repsOnly ? '回数のみ' : 'kg×回'}</button>
+          <button class="order-btn" data-move="-1" data-item="${it.id}" data-cat="${cat.id}" data-variant="${v.id}" aria-label="上へ">↑</button>
+          <button class="order-btn" data-move="1" data-item="${it.id}" data-cat="${cat.id}" data-variant="${v.id}" aria-label="下へ">↓</button>
           <button data-editdel="${it.id}" data-cat="${cat.id}" data-variant="${v.id}" style="background:none;border:none;color:#bbb;cursor:pointer;padding:6px;">✕</button>
         </div>`).join('');
     }));
@@ -861,6 +908,19 @@
       variant.items = variant.items.filter(i => i.id !== e.target.dataset.editdel);
       await saveCategories(); renderEditArea();
     }));
+    // 種目の並べ替え（↑↓で1つずつ動かす）
+    editArea.querySelectorAll('[data-move]').forEach(el => el.addEventListener('click', async () => {
+      const cat = categories.find(c => c.id === el.dataset.cat);
+      const variant = cat.variants.find(v => v.id === el.dataset.variant);
+      const i = variant.items.findIndex(t => t.id === el.dataset.item);
+      const j = i + Number(el.dataset.move);
+      if (i < 0 || j < 0 || j >= variant.items.length) return;
+      [variant.items[i], variant.items[j]] = [variant.items[j], variant.items[i]];
+      await saveCategories();
+      renderEditArea();
+      const moved = editArea.querySelector(`[data-editname="${el.dataset.item}"]`);
+      if (moved) moved.scrollIntoView({ block:'center' });
+    }));
     editArea.querySelectorAll('[data-editreps]').forEach(el => el.addEventListener('click', async () => {
       const cat = categories.find(c => c.id === el.dataset.cat);
       const variant = cat.variants.find(v => v.id === el.dataset.variant);
@@ -886,6 +946,49 @@
   let timerTick = null;
   let audioCtx = null;
   let wakeLock = null;
+  // 音の鳴らし方
+  //  sure … 開始時に「無音＋最後にピピピ」の音声を再生しておく。消音モードでも鳴り、画面ロック中も鳴りやすい。
+  //         ただし iPhone の仕様で、再生中の音楽は一時停止する
+  //  mix  … 終了時に効果音だけ鳴らす。音楽は止まらないが、消音モードや画面ロック中は鳴らない
+  let timerSound = TMStore.get('timer-sound') || 'sure';
+  let timerAudio = null;
+  let timerAudioOk = false;
+  const wavCache = {};
+
+  // 「sec 秒の無音 ＋ ピピピ」の WAV を作る（8kHz・8bit なので 3 分でも 1.5MB 程度）
+  function timerWavUrl(sec){
+    if (wavCache[sec]) return wavCache[sec];
+    const rate = 8000, n = Math.floor(rate * (sec + 1));
+    const buf = new Uint8Array(44 + n);
+    const dv = new DataView(buf.buffer);
+    const text = (o, s) => { for (let i = 0; i < s.length; i++) buf[o + i] = s.charCodeAt(i); };
+    text(0, 'RIFF'); dv.setUint32(4, 36 + n, true); text(8, 'WAVE'); text(12, 'fmt ');
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, rate, true); dv.setUint32(28, rate, true); dv.setUint16(32, 1, true); dv.setUint16(34, 8, true);
+    text(36, 'data'); dv.setUint32(40, n, true);
+    buf.fill(128, 44); // 無音
+    [0, 0.3, 0.6].forEach(offset => {
+      const start = Math.floor((sec + offset) * rate), len = Math.floor(0.2 * rate);
+      for (let i = 0; i < len && start + i < n; i++) {
+        const env = Math.min(1, i / 80, (len - i) / 80); // プツッと鳴らないよう出だしと終わりをなめらかに
+        buf[44 + start + i] = 128 + Math.round(110 * env * Math.sin(2 * Math.PI * 880 * i / rate));
+      }
+    });
+    return (wavCache[sec] = URL.createObjectURL(new Blob([buf], { type:'audio/wav' })));
+  }
+
+  function playTimerAudio(sec){
+    timerAudioOk = false;
+    timerAudio = timerAudio || new Audio();
+    timerAudio.src = timerWavUrl(sec);
+    timerAudio.currentTime = 0;
+    const p = timerAudio.play();
+    if (p) p.then(() => { timerAudioOk = true; }).catch(() => { timerAudioOk = false; });
+  }
+  function stopTimerAudio(){
+    if (timerAudio) { try { timerAudio.pause(); } catch(e) {} }
+    timerAudioOk = false;
+  }
 
   const secLabel = s => s >= 60 && s % 60 === 0 ? `${s / 60}分` : `${s}秒`;
   const timeLabel = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${pad2(s % 60)}`; };
@@ -899,8 +1002,10 @@
     if (sec) { timerSec = sec; TMStore.set('timer-sec', timerSec); }
     timerEndsAt = Date.now() + timerSec * 1000;
     TMStore.set('timer-endsAt', timerEndsAt);
-    unlockAudio();      // 音を鳴らせるようにする（iPhoneはボタンを押した流れでしか許可されない）
-    requestWakeLock();  // 休憩中に画面が消えないようにする
+    // 音の準備は、ボタンを押したこの流れの中でしかできない（iPhoneの制限）
+    unlockAudio();
+    if (timerSound === 'sure') playTimerAudio(timerSec);
+    requestWakeLock();  // 休憩中に画面が消えないようにする（対応端末のみ）
     timerBar.classList.add('running');
     timerBar.classList.remove('done');
     syncTimerVisibility();
@@ -913,6 +1018,7 @@
     TMStore.set('timer-endsAt', 0);
     clearInterval(timerTick); timerTick = null;
     timerBar.classList.remove('running', 'done');
+    stopTimerAudio();
     releaseWakeLock();
     timerMain.textContent = `⏱ ${secLabel(timerSec)}`;
     syncTimerVisibility();
@@ -933,7 +1039,10 @@
     timerBar.classList.add('done');
     timerMain.textContent = '✓ 終了';
     syncTimerVisibility();
-    beep();
+    // 再生中の音声がちょうどピピピを鳴らすところなら任せる。止まっていたら（画面ロックで中断など）効果音で鳴らす
+    const audioBeeping = timerSound === 'sure' && timerAudioOk && timerAudio && !timerAudio.paused
+      && Math.abs(timerAudio.currentTime - timerSec) < 1.5;
+    if (!audioBeeping) { stopTimerAudio(); beep(); }
     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
     releaseWakeLock();
     setTimeout(() => { if (!timerEndsAt) stopTimer(); }, 6000);
@@ -942,7 +1051,12 @@
   function unlockAudio(){
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (audioCtx.state !== 'running') audioCtx.resume();
+      // iPhone は一度実際に音を出さないと鳴らせるようにならないので、無音を一瞬再生しておく
+      const src = audioCtx.createBufferSource();
+      src.buffer = audioCtx.createBuffer(1, 1, 22050);
+      src.connect(audioCtx.destination);
+      src.start(0);
     } catch(e) { audioCtx = null; }
   }
 
@@ -977,6 +1091,17 @@
     $('timerPresets').hidden = true;
     startTimer(Number(btn.dataset.sec));
   }));
+  $('timerMix').checked = timerSound === 'mix';
+  $('timerMix').addEventListener('change', e => {
+    timerSound = e.target.checked ? 'mix' : 'sure';
+    TMStore.set('timer-sound', timerSound);
+  });
+  // 今の設定で実際に鳴るかを試す
+  $('timerTest').addEventListener('click', () => {
+    unlockAudio();
+    if (timerSound === 'sure') playTimerAudio(0);
+    else beep();
+  });
 
   function initTimer(){
     timerMain.textContent = `⏱ ${secLabel(timerSec)}`;
@@ -1130,7 +1255,14 @@
 
   // ---------- 今日のリマインダー ----------
   function restDays(){ return Object.keys(rotation).filter(k => rotation[k] && rotation[k].rest).map(Number); }
-  async function todayStatus(){ const date = todayStr(); return { date, done: dayIsDone(await loadDay(date)) }; }
+  // done … 今日はもう通知・リマインドが要らない（記録済み、または休養日にした）
+  async function todayStatus(){ const date = todayStr(); const rec = await loadDay(date); return { date, done: dayIsDone(rec) || isRestRec(rec) }; }
+
+  // その日の画面でいま見えている部分（スクロール先）
+  function sectionForDay(){
+    if (!$('restDayWrap').hidden) return $('restDayWrap');
+    return comboSection.style.display === 'none' ? checklistWrap : comboSection;
+  }
 
   async function updateReminder(){
     const { done } = await todayStatus();
@@ -1149,7 +1281,7 @@
 
   $('reminderBtn').addEventListener('click', async () => {
     await goToDate(todayStr());
-    (comboSection.style.display === 'none' ? checklistWrap : comboSection).scrollIntoView({ behavior:'smooth', block:'start' });
+    sectionForDay().scrollIntoView({ behavior:'smooth', block:'start' });
   });
 
   // 日付が変わったら（アプリを開きっぱなしで翌日になった場合など）表示を今日に合わせる
@@ -1182,7 +1314,7 @@
   const drawerOverlay = $('drawerOverlay');
   // 画面下の各メニューを、開いてその位置まで動かすための対応表
   const SECTIONS = {
-    today:    { el: () => comboSection.style.display === 'none' ? checklistWrap : comboSection, open: () => goToDate(todayStr()) },
+    today:    { el: () => sectionForDay(), open: () => goToDate(todayStr()) },
     history:  { el: () => historyList,   open: () => { if (historyList.style.display === 'none') historyToggle.click(); } },
     growth:   { el: () => growthArea,    open: () => { if (growthArea.hidden) growthToggle.click(); } },
     rotation: { el: () => rotationArea,  open: () => { if (rotationArea.style.display === 'none') rotationToggle.click(); } },

@@ -13,6 +13,9 @@
       try { localStorage.setItem(PREFIX + key, JSON.stringify(value)); return true; }
       catch(e) { console.error('保存に失敗しました', e); return false; }
     },
+    remove(key){
+      try { localStorage.removeItem(PREFIX + key); } catch(e) {}
+    },
     keys(prefix = ''){
       const out = [];
       try {

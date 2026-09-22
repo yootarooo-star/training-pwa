@@ -2,7 +2,7 @@
 // アプリのファイルを更新したら CACHE の番号を上げると、古いキャッシュが確実に入れ替わる。
 importScripts('config.js');
 
-const CACHE = 'training-menu-v5'; // app.js の APP_VERSION と数字を合わせる
+const CACHE = 'training-menu-v6'; // app.js の APP_VERSION と数字を合わせる
 const ASSETS = [
   './', 'index.html', 'style.css', 'config.js', 'storage.js', 'notify.js', 'app.js', 'manifest.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'

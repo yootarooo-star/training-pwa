@@ -90,6 +90,14 @@
     </div>
 
     <button class="btn-main" id="buildBtn" style="margin-top:14px;">この内容で今日のメニューを作成</button>
+    <button class="btn-rest" id="restDayBtn">😴 今日を休養日にする</button>
+  </div>
+
+  <div id="restDayWrap" class="rest-day" hidden>
+    <div class="rest-day-icon">😴</div>
+    <div class="rest-day-text" id="restDayText">今日は休養日です</div>
+    <div class="rest-day-sub">継続日数は途切れません。しっかり休もう！</div>
+    <button class="btn-outline" id="cancelRestBtn">休養日をやめる</button>
   </div>
 
   <div id="rebuildNoteWrap" style="display:none;">
@@ -133,6 +141,9 @@
       <button data-sec="90">90秒</button>
       <button data-sec="120">2分</button>
       <button data-sec="180">3分</button>
+      <div class="timer-sep"></div>
+      <label class="timer-mix"><input type="checkbox" id="timerMix"> 音楽を止めない</label>
+      <button class="timer-test" id="timerTest">🔔 音のテスト</button>
     </div>
     <div class="timer-row">
       <button class="timer-main" id="timerMain">⏱ 90秒</button>
